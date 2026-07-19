@@ -14,6 +14,7 @@ require_once __DIR__ . '/../libs/CalDAVProvider.php';
 class KalenderKonto extends IPSModuleStrict
 {
     private const DATA_ID_TO_CHILD = '{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}';
+    private const APPLE_CALDAV_URL = 'https://caldav.icloud.com';
 
     private const PROVIDER_APPLE = 0;
     private const PROVIDER_CALDAV = 1;
@@ -33,7 +34,7 @@ class KalenderKonto extends IPSModuleStrict
 
         $this->RegisterPropertyBoolean('Active', false);
         $this->RegisterPropertyInteger('Provider', self::PROVIDER_APPLE);
-        $this->RegisterPropertyString('ServerURL', '');
+        $this->RegisterPropertyString('ServerURL', self::APPLE_CALDAV_URL);
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
         $this->RegisterPropertyInteger('UpdateInterval', 15);
@@ -45,6 +46,56 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterAttributeString('LastError', '');
 
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_Synchronize($_IPS[\'TARGET\']);');
+    }
+
+    public function GetConfigurationForm(): string
+    {
+        $form = json_decode(
+            file_get_contents(__DIR__ . '/form.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        $provider = $this->ReadPropertyInteger('Provider');
+
+        foreach ($form['elements'] as &$element) {
+            if (($element['name'] ?? '') !== 'ServerURL') {
+                continue;
+            }
+
+            $element['enabled'] = $provider === self::PROVIDER_CALDAV;
+            if ($provider === self::PROVIDER_APPLE) {
+                $element['value'] = self::APPLE_CALDAV_URL;
+            }
+            break;
+        }
+        unset($element);
+
+        return json_encode(
+            $form,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+    }
+
+    public function UpdateProviderForm(int $provider): void
+    {
+        if ($provider === self::PROVIDER_APPLE) {
+            $this->UpdateFormField('ServerURL', 'value', self::APPLE_CALDAV_URL);
+            $this->UpdateFormField('ServerURL', 'enabled', false);
+            return;
+        }
+
+        if ($provider === self::PROVIDER_CALDAV) {
+            $storedProvider = $this->ReadPropertyInteger('Provider');
+            $storedServerUrl = trim($this->ReadPropertyString('ServerURL'));
+            if ($storedProvider === self::PROVIDER_APPLE || $storedServerUrl === self::APPLE_CALDAV_URL) {
+                $this->UpdateFormField('ServerURL', 'value', '');
+            }
+            $this->UpdateFormField('ServerURL', 'enabled', true);
+            return;
+        }
+
+        $this->UpdateFormField('ServerURL', 'enabled', false);
     }
 
     public function ApplyChanges(): void
@@ -235,10 +286,9 @@ class KalenderKonto extends IPSModuleStrict
             throw new RuntimeException('The selected provider is not implemented yet.');
         }
 
-        $serverUrl = trim($this->ReadPropertyString('ServerURL'));
-        if ($provider === self::PROVIDER_APPLE && $serverUrl === '') {
-            $serverUrl = 'https://caldav.icloud.com';
-        }
+        $serverUrl = $provider === self::PROVIDER_APPLE
+            ? self::APPLE_CALDAV_URL
+            : trim($this->ReadPropertyString('ServerURL'));
 
         $httpClient = new CalendarHttpClient(
             max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),

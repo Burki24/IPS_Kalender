@@ -9,6 +9,7 @@
             "type": "Select",
             "name": "Provider",
             "caption": "Provider",
+            "onChange": "IPSKALACC_UpdateProviderForm($id, $Provider);",
             "options": [
                 {
                     "caption": "Apple iCloud",
@@ -36,6 +37,7 @@
             "type": "ValidationTextBox",
             "name": "ServerURL",
             "caption": "Server URL",
+            "enabled": false,
             "validate": "^$|^https?://.+"
         },
         {
