@@ -1,67 +1,73 @@
 # Kalender Konto
-Beschreibung des Moduls.
 
-### Inhaltsverzeichnis
+Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die Kalender dieses Kontos den untergeordneten Modulen zur Verfügung.
 
-1. [Funktionsumfang](#1-funktionsumfang)
-2. [Voraussetzungen](#2-voraussetzungen)
-3. [Software-Installation](#3-software-installation)
-4. [Einrichten der Instanzen in Symcon](#4-einrichten-der-instanzen-in-symcon)
-5. [Statusvariablen und Profile](#5-statusvariablen-und-profile)
-6. [WebFront](#6-webfront)
-7. [PHP-Befehlsreferenz](#7-php-befehlsreferenz)
+## Funktionsumfang
 
-### 1. Funktionsumfang
+- Apple iCloud über CalDAV und anwendungsspezifisches Passwort
+- generische CalDAV-Server
+- CalDAV-Discovery von Principal, Calendar Home Set und Kalendern
+- Erkennung von Kalendername, Beschreibung, Farbe und Zugriffsrechten
+- Zwischenspeicherung der gefundenen Kalender
+- zyklische Synchronisation
+- einheitlicher Datenfluss zum Kalender-Konfigurator und zu Kalenderinstanzen
+- vorbereitete Provider-Auswahl für Google Calendar, Microsoft 365 und ICS/Webcal
 
-*
+Google, Microsoft und ICS/Webcal sind in diesem Entwicklungsstand noch nicht implementiert.
 
-### 2. Voraussetzungen
+## Voraussetzungen
 
-- Symcon ab Version 7.1
+- Symcon ab Version 8.1
+- PHP-Erweiterungen cURL und DOM
+- Zugriff des Symcon-Servers auf den jeweiligen Kalenderdienst
 
-### 3. Software-Installation
+Für Apple iCloud wird ein anwendungsspezifisches Passwort benötigt. Das normale Kennwort des Apple Accounts sollte nicht verwendet werden.
 
-* Über den Module Store das 'Kalender Konto'-Modul installieren.
-* Alternativ über das Module Control folgende URL hinzufügen
+## Einrichtung
 
-### 4. Einrichten der Instanzen in Symcon
+Unter **Instanz hinzufügen** das Modul **Kalender Konto** auswählen.
 
- Unter 'Instanz hinzufügen' kann das 'Kalender Konto'-Modul mithilfe des Schnellfilters gefunden werden.  
-	- Weitere Informationen zum Hinzufügen von Instanzen in der [Dokumentation der Instanzen](https://www.symcon.de/service/dokumentation/konzepte/instanzen/#Instanz_hinzufügen)
+Eigenschaft | Beschreibung
+--- | ---
+Aktiv | Aktiviert die regelmäßige Synchronisation
+Anbieter | Apple iCloud oder generischer CalDAV-Server
+Server-URL | Bei Apple optional; ansonsten URL des CalDAV-Servers
+Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos
+Passwort | Passwort oder anwendungsspezifisches Passwort
+Aktualisierungsintervall | Abstand der Kalenderabfragen in Minuten
+TLS-Zertifikat prüfen | Sollte nur zu Diagnosezwecken deaktiviert werden
+Zeitlimit der Anfrage | Maximale Dauer einer HTTP-Anfrage
 
-__Konfigurationsseite__:
+Über **Verbindung testen** wird die Anmeldung geprüft und die Anzahl der gefundenen Kalender ausgegeben. **Jetzt synchronisieren** aktualisiert den internen Kalendercache und informiert die verbundenen Child-Instanzen.
 
-Name     | Beschreibung
--------- | ------------------
-         |
-         |
+## Datenfluss
 
-### 5. Statusvariablen und Profile
+Unterstützte Anforderungen von Child-Modulen:
 
-Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzelner kann zu Fehlfunktionen führen.
+- `GetCalendars`
+- `Synchronize`
+- `TestConnection`
 
-#### Statusvariablen
+Nach einer erfolgreichen Synchronisation sendet das Konto `CalendarsUpdated` an seine Children.
 
-Name   | Typ     | Beschreibung
------- | ------- | ------------
-       |         |
-       |         |
+Beispiel einer Anforderung:
 
-#### Profile
+```json
+{
+    "DataID": "{4E535B1D-69C7-AC77-1372-0282B21BAEC9}",
+    "Operation": "GetCalendars",
+    "RequestID": "example-1"
+}
+```
 
-Name   | Typ
------- | -------
-       |
-       |
+## PHP-Befehlsreferenz
 
-### 6. Visualisierung
+```php
+string IPSKALACC_TestConnection(int $InstanzID);
+bool IPSKALACC_Synchronize(int $InstanzID);
+string IPSKALACC_GetCalendars(int $InstanzID);
+string IPSKALACC_GetAccountStatus(int $InstanzID);
+void IPSKALACC_ClearCache(int $InstanzID);
+```
 
-Die Funktionalität, die das Modul in der Visualisierung bietet.
-
-### 7. PHP-Befehlsreferenz
-
-`boolean IPSKALACC_BeispielFunktion(integer $InstanzID);`
-Erklärung der Funktion.
-
-Beispiel:
-`IPSKALACC_BeispielFunktion(12345);`
+Die Methoden mit komplexen Rückgabewerten liefern JSON. Passwörter werden weder in Rückgabewerte noch in Debugmeldungen geschrieben.

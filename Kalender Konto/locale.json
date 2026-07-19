@@ -1,8 +1,29 @@
 {
     "translations": {
         "de": {
-            "Translation 1": "Übersetzung 1",
-            "Translation 2": "Übersetzung 2"
+            "Active": "Aktiv",
+            "Provider": "Anbieter",
+            "Google Calendar (planned)": "Google Kalender (geplant)",
+            "Microsoft 365 (planned)": "Microsoft 365 (geplant)",
+            "ICS/Webcal (planned)": "ICS/Webcal (geplant)",
+            "Server URL": "Server-URL",
+            "Username": "Benutzername",
+            "Password": "Passwort",
+            "Update interval": "Aktualisierungsintervall",
+            " minutes": " Minuten",
+            "Verify TLS certificate": "TLS-Zertifikat prüfen",
+            "Request timeout": "Zeitlimit der Anfrage",
+            " seconds": " Sekunden",
+            "Test connection": "Verbindung testen",
+            "Synchronize now": "Jetzt synchronisieren",
+            "Show account status": "Kontostatus anzeigen",
+            "Synchronization successful.": "Synchronisation erfolgreich.",
+            "Synchronization failed.": "Synchronisation fehlgeschlagen.",
+            "Configuration incomplete": "Konfiguration unvollständig",
+            "Authentication failed": "Authentifizierung fehlgeschlagen",
+            "Connection failed": "Verbindung fehlgeschlagen",
+            "Provider not implemented yet": "Anbieter noch nicht implementiert",
+            "Invalid provider response": "Ungültige Antwort des Anbieters"
         }
     }
 }

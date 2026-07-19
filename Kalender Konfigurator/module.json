@@ -4,9 +4,13 @@
     "type": 4,
     "vendor": "Burkhard Kneiseler",
     "aliases": [],
-    "parentRequirements": [],
+    "parentRequirements": [
+        "{4E535B1D-69C7-AC77-1372-0282B21BAEC9}"
+    ],
     "childRequirements": [],
-    "implemented": [],
+    "implemented": [
+        "{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}"
+    ],
     "prefix": "IPSKALCFG",
     "url": ""
 }
