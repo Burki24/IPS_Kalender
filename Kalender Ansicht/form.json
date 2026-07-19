@@ -105,6 +105,11 @@
                     "caption": "Show description"
                 }
             ]
+        },
+        {
+            "type": "CheckBox",
+            "name": "EnableIPSView",
+            "caption": "Provide IPSView HTMLBox"
         }
     ],
     "actions": [

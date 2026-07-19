@@ -31,6 +31,10 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
+        html.ipsview-mode { --tile-title-clearance: 0px; }
+        html.ipsview-mode #refresh-button,
+        html.ipsview-mode #add-button { display: none !important; }
+
         button, input, select, textarea { font: inherit; }
         button { color: inherit; }
 
@@ -473,6 +477,7 @@
         calendarState.settings = calendarState.settings || {};
         if (!initialized) {
             activeView = calendarState.settings.defaultView || 'agenda';
+            applyStaticTranslations();
             initialized = true;
         }
         render();
@@ -492,7 +497,8 @@
         } else {
             renderAgenda();
         }
-        const hasWritableCalendar = calendarState.calendars.some(calendar => calendar.canWrite);
+        const hasWritableCalendar = hasActionBridge()
+            && calendarState.calendars.some(calendar => calendar.canWrite);
         document.getElementById('add-button').classList.toggle('visible', hasWritableCalendar);
     }
 
@@ -719,14 +725,17 @@
         document.getElementById('event-description').value = event.description || '';
         document.getElementById('event-all-day').checked = Boolean(event.allDay);
         setDateInputs(eventStart(event), eventEnd(event), Boolean(event.allDay));
-        const editable = Boolean(event.canWrite) && !event.recurring && !event.recurrenceId;
+        const editable = hasActionBridge()
+            && Boolean(event.canWrite) && !event.recurring && !event.recurrenceId;
         setDialogEditable(editable);
         document.getElementById('delete-button').classList.toggle('hidden', !editable);
         const note = document.getElementById('dialog-note');
         if (!editable) {
-            note.textContent = event.recurring || event.recurrenceId
-                ? t('Recurring occurrences are currently read-only.')
-                : t('This calendar is read-only.');
+            note.textContent = !hasActionBridge()
+                ? t('Editing events is only available in the Symcon tile.')
+                : (event.recurring || event.recurrenceId
+                    ? t('Recurring occurrences are currently read-only.')
+                    : t('This calendar is read-only.'));
             note.classList.remove('hidden');
         } else {
             note.classList.add('hidden');
@@ -881,6 +890,23 @@
         if (typeof requestAction === 'function') requestAction(ident, typeof value === 'string' ? value : JSON.stringify(value));
     }
 
+    function hasActionBridge() { return typeof requestAction === 'function'; }
+
+    function applyStaticTranslations() {
+        document.querySelectorAll('label[for]').forEach(label => {
+            label.textContent = t(label.textContent.trim());
+        });
+        [
+            ['delete-button', 'Delete'],
+            ['cancel-button', 'Cancel'],
+            ['save-button', 'Save']
+        ].forEach(([id, text]) => { document.getElementById(id).textContent = t(text); });
+        [
+            ['dialog-close', 'Close'],
+            ['add-button', 'Create event']
+        ].forEach(([id, text]) => { document.getElementById(id).title = t(text); });
+    }
+
     function showToast(message, level) {
         const toast = document.getElementById('toast');
         toast.textContent = message;
@@ -906,7 +932,10 @@
     }
 
     function t(value) {
-        try { return typeof translate === 'function' ? translate(value) : value; }
+        try {
+            if (window.ipsViewTranslations && window.ipsViewTranslations[value]) return window.ipsViewTranslations[value];
+            return typeof translate === 'function' ? translate(value) : value;
+        }
         catch (error) { return value; }
     }
     function element(tag, className) { const node = document.createElement(tag); node.className = className; return node; }

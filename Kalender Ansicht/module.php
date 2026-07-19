@@ -22,6 +22,7 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowCalendarName', true);
         $this->RegisterPropertyBoolean('ShowLocation', true);
         $this->RegisterPropertyBoolean('ShowDescription', false);
+        $this->RegisterPropertyBoolean('EnableIPSView', false);
 
         $this->SetVisualizationType(1);
     }
@@ -29,6 +30,15 @@ class KalenderAnsicht extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+
+        $this->MaintainVariable(
+            'IPSViewCalendar',
+            'IPSView calendar',
+            VARIABLETYPE_STRING,
+            '~HTMLBox',
+            10,
+            $this->ReadPropertyBoolean('EnableIPSView')
+        );
 
         foreach ($this->GetMessageList() as $senderId => $messageIds) {
             foreach ($messageIds as $messageId) {
@@ -63,15 +73,7 @@ class KalenderAnsicht extends IPSModuleStrict
 
     public function GetVisualizationTile(): string
     {
-        $html = file_get_contents(__DIR__ . '/module.html');
-        if ($html === false) {
-            return '';
-        }
-
-        return $html . '<script>handleMessage(' . json_encode(
-            $this->getFullUpdateMessage(),
-            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
-        ) . ');</script>';
+        return $this->renderCalendarHtml($this->buildState(), false);
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
@@ -178,21 +180,88 @@ class KalenderAnsicht extends IPSModuleStrict
         );
     }
 
+    public function GetIPSViewHTML(): string
+    {
+        return $this->renderCalendarHtml($this->buildState(), true);
+    }
+
     private function broadcastState(): void
     {
         try {
-            $this->UpdateVisualizationValue($this->getFullUpdateMessage());
+            $state = $this->buildState();
+        } catch (Throwable $exception) {
+            $this->SendDebug('CalendarState', $exception->getMessage(), 0);
+            return;
+        }
+
+        try {
+            $this->UpdateVisualizationValue($this->getFullUpdateMessage($state));
         } catch (Throwable $exception) {
             $this->SendDebug('VisualizationUpdate', $exception->getMessage(), 0);
         }
+
+        if ($this->ReadPropertyBoolean('EnableIPSView')
+            && $this->findChildByIdent($this->InstanceID, 'IPSViewCalendar') > 0) {
+            try {
+                $this->SetValue('IPSViewCalendar', $this->renderCalendarHtml($state, true));
+            } catch (Throwable $exception) {
+                $this->SendDebug('IPSViewUpdate', $exception->getMessage(), 0);
+            }
+        }
     }
 
-    private function getFullUpdateMessage(): string
+    /**
+     * @param array<string, mixed>|null $state
+     */
+    private function getFullUpdateMessage(?array $state = null): string
     {
         return json_encode(
-            ['type' => 'state', 'payload' => $this->buildState()],
+            ['type' => 'state', 'payload' => $state ?? $this->buildState()],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    private function renderCalendarHtml(array $state, bool $ipsView): string
+    {
+        $html = file_get_contents(__DIR__ . '/module.html');
+        if ($html === false) {
+            return '';
+        }
+
+        $translations = [];
+        if ($ipsView) {
+            $html = str_replace('<html lang="en">', '<html lang="de" class="ipsview-mode">', $html);
+            foreach ([
+                'Agenda', '3 Days', 'Week', 'Month', 'Previous', 'Today', 'Next', 'Refresh',
+                'No calendars selected', 'Select at least one calendar in the instance configuration.',
+                'No events', 'There are no events in this period.', 'All day', 'Untitled event',
+                'more', 'Create event', 'Event details', 'Calendar', 'Title', 'Start', 'End', 'Location',
+                'Description', 'Cancel', 'Save', 'Delete', 'Close', 'Tomorrow', 'Yesterday',
+                'Recurring occurrences are currently read-only.', 'This calendar is read-only.',
+                'Editing events is only available in the Symcon tile.'
+            ] as $text) {
+                $translations[$text] = $this->Translate($text);
+            }
+        }
+
+        $bootstrap = [
+            'translations' => $translations,
+            'message'      => ['type' => 'state', 'payload' => $state]
+        ];
+
+        $script = '<script>(function(bootstrap){'
+            . 'window.ipsViewTranslations=bootstrap.translations||{};'
+            . 'handleMessage(bootstrap.message);'
+            . '})(' . json_encode(
+                $bootstrap,
+                JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+                    | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            ) . ');</script>';
+
+        return str_replace('</body>', $script . '</body>', $html);
     }
 
     /**

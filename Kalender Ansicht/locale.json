@@ -16,6 +16,8 @@
             "Show calendar name": "Kalendernamen anzeigen",
             "Show location": "Ort anzeigen",
             "Show description": "Beschreibung anzeigen",
+            "Provide IPSView HTMLBox": "IPSView-HTMLBox bereitstellen",
+            "IPSView calendar": "IPSView-Kalender",
             "Synchronize calendars": "Kalender synchronisieren",
             "Synchronization successful.": "Synchronisation erfolgreich.",
             "Synchronization failed.": "Synchronisation fehlgeschlagen.",
@@ -52,6 +54,7 @@
             "Yesterday": "Gestern",
             "Recurring occurrences are currently read-only.": "Wiederkehrende Termine können derzeit nur gelesen werden.",
             "This calendar is read-only.": "Dieser Kalender ist schreibgeschützt.",
+            "Editing events is only available in the Symcon tile.": "Termine können nur in der Symcon-Kachel bearbeitet werden.",
             "Delete this event?": "Diesen Termin löschen?"
         }
     }
