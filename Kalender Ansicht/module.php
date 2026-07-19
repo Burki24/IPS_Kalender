@@ -285,7 +285,18 @@ class KalenderAnsicht extends IPSModuleStrict
                 continue;
             }
             $usedIds[$instanceId] = true;
-            $color = strtoupper(trim((string) IPS_GetProperty($instanceId, 'CalendarColor')));
+            $calendarStatus = [];
+            try {
+                $decodedStatus = json_decode(IPSKAL_GetCalendarStatus($instanceId), true, 512, JSON_THROW_ON_ERROR);
+                if (is_array($decodedStatus)) {
+                    $calendarStatus = $decodedStatus;
+                }
+            } catch (Throwable $exception) {
+                $this->SendDebug('CalendarStatus', $exception->getMessage(), 0);
+            }
+
+            $color = strtoupper(trim((string) ($calendarStatus['calendarColor']
+                ?? IPS_GetProperty($instanceId, 'CalendarColor'))));
             if (preg_match('/^#[0-9A-F]{6}$/', $color) !== 1) {
                 $palette = ['#4F8EF7', '#4FB286', '#E09F3E', '#D65DB1', '#7B61FF', '#EF6F6C', '#2CA6A4'];
                 $color = $palette[abs(crc32((string) $instanceId)) % count($palette)];
@@ -295,7 +306,8 @@ class KalenderAnsicht extends IPSModuleStrict
                 'instanceId' => $instanceId,
                 'name'       => IPS_GetName($instanceId),
                 'color'      => $color,
-                'canWrite'   => (bool) IPS_GetProperty($instanceId, 'CanWrite')
+                'canWrite'   => (bool) ($calendarStatus['canWrite']
+                    ?? IPS_GetProperty($instanceId, 'CanWrite'))
             ];
         }
 

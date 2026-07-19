@@ -28,6 +28,9 @@ class Kalender extends IPSModuleStrict
         $this->RegisterAttributeString('CachedEvents', '[]');
         $this->RegisterAttributeInteger('LastSynchronization', 0);
         $this->RegisterAttributeString('LastError', '');
+        $this->RegisterAttributeBoolean('CalendarMetadataAvailable', false);
+        $this->RegisterAttributeString('DetectedCalendarColor', '');
+        $this->RegisterAttributeBoolean('DetectedCanWrite', false);
 
         $this->RegisterVariableInteger('EventCount', 'Event count', '', 10);
         $this->RegisterVariableInteger('LastSynchronization', 'Last synchronization', '~UnixTimestamp', 20);
@@ -56,7 +59,23 @@ class Kalender extends IPSModuleStrict
 
         $interval = max(1, $this->ReadPropertyInteger('UpdateInterval'));
         $this->SetTimerInterval('SynchronizationTimer', $interval * 60 * 1000);
+        $this->refreshCalendarMetadataSafely();
         $this->SetStatus(IS_ACTIVE);
+    }
+
+    public function ReceiveData(string $JSONString): string
+    {
+        try {
+            $message = json_decode($JSONString, true, 512, JSON_THROW_ON_ERROR);
+            if (is_array($message) && ($message['Operation'] ?? '') === 'CalendarsUpdated'
+                && is_array($message['Payload'] ?? null)) {
+                $this->applyCalendarMetadata($message['Payload']);
+            }
+        } catch (Throwable $exception) {
+            $this->SendDebug('CalendarMetadata', $exception->getMessage(), 0);
+        }
+
+        return '';
     }
 
     public function Synchronize(): bool
@@ -66,6 +85,7 @@ class Kalender extends IPSModuleStrict
         }
 
         try {
+            $this->refreshCalendarMetadataSafely();
             $events = $this->requestEvents();
             $this->storeEvents($events);
             $this->WriteAttributeString('LastError', '');
@@ -161,17 +181,69 @@ class Kalender extends IPSModuleStrict
 
     public function GetCalendarStatus(): string
     {
+        $this->refreshCalendarMetadataSafely();
+        $metadataAvailable = $this->ReadAttributeBoolean('CalendarMetadataAvailable');
+        $detectedColor = $this->ReadAttributeString('DetectedCalendarColor');
+
         return json_encode(
             [
                 'calendarId'          => $this->ReadPropertyString('CalendarID'),
-                'calendarColor'       => $this->ReadPropertyString('CalendarColor'),
-                'canWrite'            => $this->ReadPropertyBoolean('CanWrite'),
+                'calendarColor'       => $metadataAvailable && $detectedColor !== ''
+                    ? $detectedColor
+                    : $this->ReadPropertyString('CalendarColor'),
+                'canWrite'            => $metadataAvailable
+                    ? $this->ReadAttributeBoolean('DetectedCanWrite')
+                    : $this->ReadPropertyBoolean('CanWrite'),
                 'eventCount'          => count($this->readEvents()),
                 'lastSynchronization' => $this->ReadAttributeInteger('LastSynchronization'),
                 'lastError'           => $this->ReadAttributeString('LastError')
             ],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
+    }
+
+    private function refreshCalendarMetadataSafely(): void
+    {
+        try {
+            $this->applyCalendarMetadata($this->sendRequest('GetCalendars'));
+        } catch (Throwable $exception) {
+            $this->SendDebug('CalendarMetadata', $exception->getMessage(), 0);
+        }
+    }
+
+    /**
+     * @param list<array<string, mixed>> $calendars
+     */
+    private function applyCalendarMetadata(array $calendars): void
+    {
+        $calendarId = $this->ReadPropertyString('CalendarID');
+        $providerCalendarId = $this->ReadPropertyString('ProviderCalendarID');
+        $calendarUrl = $this->ReadPropertyString('CalendarURL');
+
+        foreach ($calendars as $calendar) {
+            if (!is_array($calendar)) {
+                continue;
+            }
+            $matches = ($calendarId !== '' && (string) ($calendar['id'] ?? '') === $calendarId)
+                || ($providerCalendarId !== '' && (string) ($calendar['providerId'] ?? '') === $providerCalendarId)
+                || ($calendarUrl !== '' && (string) ($calendar['url'] ?? '') === $calendarUrl);
+            if (!$matches) {
+                continue;
+            }
+
+            $capabilities = is_array($calendar['capabilities'] ?? null) ? $calendar['capabilities'] : [];
+            $canWrite = (bool) ($capabilities['create'] ?? false)
+                || (bool) ($capabilities['update'] ?? false)
+                || (bool) ($capabilities['delete'] ?? false);
+            $this->WriteAttributeString('DetectedCalendarColor', trim((string) ($calendar['color'] ?? '')));
+            $this->WriteAttributeBoolean('DetectedCanWrite', $canWrite);
+            $this->WriteAttributeBoolean('CalendarMetadataAvailable', true);
+            return;
+        }
+
+        if ($calendars !== []) {
+            $this->WriteAttributeBoolean('CalendarMetadataAvailable', false);
+        }
     }
 
     /**
