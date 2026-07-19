@@ -45,6 +45,11 @@ Zeitlimit der Anfrage | Maximale Dauer einer HTTP-Anfrage
 Unterstützte Anforderungen von Child-Modulen:
 
 - `GetCalendars`
+- `DiscoverCalendars`
+- `GetEvents`
+- `CreateEvent`
+- `UpdateEvent`
+- `DeleteEvent`
 - `Synchronize`
 - `TestConnection`
 

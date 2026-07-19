@@ -1,30 +1,91 @@
 {
     "elements": [
         {
-            "type": "ValidationTextBox",
-            "name": "CalendarID",
-            "caption": "Calendar ID",
-            "enabled": false
+            "type": "CheckBox",
+            "name": "Active",
+            "caption": "Active"
         },
         {
-            "type": "ValidationTextBox",
-            "name": "ProviderCalendarID",
-            "caption": "Provider calendar ID",
-            "enabled": false
+            "type": "NumberSpinner",
+            "name": "UpdateInterval",
+            "caption": "Update interval",
+            "suffix": " minutes",
+            "minimum": 1
         },
         {
-            "type": "ValidationTextBox",
-            "name": "CalendarURL",
-            "caption": "Calendar URL",
-            "enabled": false
+            "type": "NumberSpinner",
+            "name": "PastDays",
+            "caption": "Load past events",
+            "suffix": " days",
+            "minimum": 0,
+            "maximum": 1095
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "FutureDays",
+            "caption": "Load future events",
+            "suffix": " days",
+            "minimum": 1,
+            "maximum": 1095
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Calendar identity",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "ValidationTextBox",
+                    "name": "CalendarID",
+                    "caption": "Calendar ID",
+                    "enabled": false
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "ProviderCalendarID",
+                    "caption": "Provider calendar ID",
+                    "enabled": false
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "CalendarURL",
+                    "caption": "Calendar URL",
+                    "enabled": false
+                }
+            ]
         }
     ],
-    "actions": [],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Synchronize now",
+            "onClick": "echo IPSKAL_Synchronize($id) ? 'Synchronization successful.' : 'Synchronization failed.';"
+        },
+        {
+            "type": "Button",
+            "caption": "Clear cache",
+            "onClick": "IPSKAL_ClearCache($id);"
+        }
+    ],
     "status": [
         {
             "code": 201,
             "icon": "error",
             "caption": "Configuration incomplete"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "Synchronization failed"
+        },
+        {
+            "code": 203,
+            "icon": "error",
+            "caption": "Invalid calendar response"
+        },
+        {
+            "code": 204,
+            "icon": "error",
+            "caption": "Event write conflict"
         }
     ]
 }

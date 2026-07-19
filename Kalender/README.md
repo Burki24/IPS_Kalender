@@ -1,67 +1,104 @@
 # Kalender
-Beschreibung des Moduls.
 
-### Inhaltsverzeichnis
+Das Modul repräsentiert einen einzelnen Online-Kalender. Es wird normalerweise über den **Kalender Konfigurator** erstellt und mit dem zugehörigen **Kalender Konto** verbunden.
 
-1. [Funktionsumfang](#1-funktionsumfang)
-2. [Voraussetzungen](#2-voraussetzungen)
-3. [Software-Installation](#3-software-installation)
-4. [Einrichten der Instanzen in Symcon](#4-einrichten-der-instanzen-in-symcon)
-5. [Statusvariablen und Profile](#5-statusvariablen-und-profile)
-6. [WebFront](#6-webfront)
-7. [PHP-Befehlsreferenz](#7-php-befehlsreferenz)
+## Funktionsumfang
 
-### 1. Funktionsumfang
+- Abruf von CalDAV-Terminen über einen konfigurierbaren Zeitraum
+- Auflösen wiederkehrender Termine für die lokale Anzeige
+- lokaler JSON-Cache und zyklische Synchronisation
+- Erstellen neuer Termine
+- Ändern einzelner, nicht wiederkehrender Termine
+- Löschen einzelner, nicht wiederkehrender Termine
+- ETag-basierter Schutz vor dem Überschreiben zwischenzeitlicher Änderungen
+- Statusvariablen für Terminanzahl, Zeitpunkt der letzten Synchronisation und Termindaten
 
-*
+Das Ändern oder einzelne Löschen von Vorkommen einer Terminserie ist noch nicht freigegeben. Dadurch verhindert das Modul, dass eine komplette Serie versehentlich überschrieben oder gelöscht wird.
 
-### 2. Voraussetzungen
+## Voraussetzungen
 
-- Symcon ab Version 7.1
+- Symcon ab Version 8.1
+- eine verbundene Instanz **Kalender Konto**
+- eine über den Konfigurator zugewiesene Kalender-ID
 
-### 3. Software-Installation
+## Konfiguration
 
-* Über den Module Store das 'Kalender'-Modul installieren.
-* Alternativ über das Module Control folgende URL hinzufügen
+Eigenschaft | Beschreibung
+--- | ---
+Aktiv | Aktiviert die regelmäßige Synchronisation
+Aktualisierungsintervall | Abstand der Terminabfragen in Minuten
+Vergangene Termine laden | Anzahl der Tage vor dem aktuellen Datum
+Zukünftige Termine laden | Anzahl der Tage nach dem aktuellen Datum
+Kalenderidentität | Vom Konfigurator gesetzte, schreibgeschützte Anbieterinformationen
 
-### 4. Einrichten der Instanzen in Symcon
+## Statusvariablen
 
- Unter 'Instanz hinzufügen' kann das 'Kalender'-Modul mithilfe des Schnellfilters gefunden werden.  
-	- Weitere Informationen zum Hinzufügen von Instanzen in der [Dokumentation der Instanzen](https://www.symcon.de/service/dokumentation/konzepte/instanzen/#Instanz_hinzufügen)
+Variable | Typ | Beschreibung
+--- | --- | ---
+Anzahl Termine | Integer | Anzahl der aktuell zwischengespeicherten Termine
+Letzte Synchronisation | Integer | Unix-Zeitpunkt der letzten erfolgreichen Abfrage
+Termine | String | JSON-kodierte Liste der Termine
 
-__Konfigurationsseite__:
+Ein Termin enthält unter anderem `id`, `uid`, `resourceUrl`, `etag`, `summary`, `description`, `location`, `start`, `end`, `startTimestamp`, `endTimestamp`, `allDay`, `status`, `recurrenceRule` und `recurrenceId`.
 
-Name     | Beschreibung
--------- | ------------------
-         |
-         |
+## PHP-Befehlsreferenz
 
-### 5. Statusvariablen und Profile
+```php
+bool IPSKAL_Synchronize(int $InstanzID);
+string IPSKAL_GetEvents(int $InstanzID);
+string IPSKAL_CreateEvent(int $InstanzID, string $EventJSON);
+string IPSKAL_UpdateEvent(int $InstanzID, string $EventJSON);
+bool IPSKAL_DeleteEvent(int $InstanzID, string $EventJSON);
+string IPSKAL_GetCalendarStatus(int $InstanzID);
+void IPSKAL_ClearCache(int $InstanzID);
+```
 
-Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzelner kann zu Fehlfunktionen führen.
+### Termin erstellen
 
-#### Statusvariablen
+```php
+$result = IPSKAL_CreateEvent(12345, json_encode([
+    'summary'     => 'Besprechung',
+    'description' => 'Projektstatus abstimmen',
+    'location'    => 'Büro',
+    'start'       => '2026-07-20T10:00:00+02:00',
+    'end'         => '2026-07-20T11:00:00+02:00'
+]));
+```
 
-Name   | Typ     | Beschreibung
------- | ------- | ------------
-       |         |
-       |         |
+Bei ganztägigen Terminen werden `start` und `end` als Datum angegeben. Das Ende ist entsprechend iCalendar exklusiv:
 
-#### Profile
+```php
+$result = IPSKAL_CreateEvent(12345, json_encode([
+    'summary' => 'Urlaub',
+    'start'   => '2026-08-03',
+    'end'     => '2026-08-08',
+    'allDay'  => true
+]));
+```
 
-Name   | Typ
------- | -------
-       |
-       |
+### Termin ändern
 
-### 6. Visualisierung
+`uid`, `resourceUrl` und `etag` stammen aus `IPSKAL_GetEvents`. Unter `changes` werden nur die zu ändernden Felder übergeben:
 
-Die Funktionalität, die das Modul in der Visualisierung bietet.
+```php
+$result = IPSKAL_UpdateEvent(12345, json_encode([
+    'uid'         => 'event-uid@example',
+    'resourceUrl' => 'https://server.example/calendar/event.ics',
+    'etag'        => '"123456"',
+    'changes'     => [
+        'summary' => 'Geänderte Besprechung',
+        'location' => 'Konferenzraum'
+    ]
+]));
+```
 
-### 7. PHP-Befehlsreferenz
+### Termin löschen
 
-`boolean IPSKAL_BeispielFunktion(integer $InstanzID);`
-Erklärung der Funktion.
+```php
+$success = IPSKAL_DeleteEvent(12345, json_encode([
+    'resourceUrl' => 'https://server.example/calendar/event.ics',
+    'etag'        => '"123456"'
+]));
+```
 
-Beispiel:
-`IPSKAL_BeispielFunktion(12345);`
+Nach jeder erfolgreichen Schreiboperation wird der lokale Termincache erneut vom Server geladen.

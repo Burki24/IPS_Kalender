@@ -1,10 +1,27 @@
 {
     "translations": {
         "de": {
+            "Active": "Aktiv",
+            "Update interval": "Aktualisierungsintervall",
+            " minutes": " Minuten",
+            "Load past events": "Vergangene Termine laden",
+            "Load future events": "Zukünftige Termine laden",
+            " days": " Tage",
+            "Calendar identity": "Kalenderidentität",
             "Calendar ID": "Kalender-ID",
             "Provider calendar ID": "Kalender-ID des Anbieters",
             "Calendar URL": "Kalender-URL",
-            "Configuration incomplete": "Konfiguration unvollständig"
+            "Synchronize now": "Jetzt synchronisieren",
+            "Synchronization successful.": "Synchronisation erfolgreich.",
+            "Synchronization failed.": "Synchronisation fehlgeschlagen.",
+            "Clear cache": "Cache leeren",
+            "Configuration incomplete": "Konfiguration unvollständig",
+            "Synchronization failed": "Synchronisation fehlgeschlagen",
+            "Invalid calendar response": "Ungültige Kalenderantwort",
+            "Event write conflict": "Terminkonflikt beim Schreiben",
+            "Event count": "Anzahl Termine",
+            "Last synchronization": "Letzte Synchronisation",
+            "Events": "Termine"
         }
     }
 }

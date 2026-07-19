@@ -146,6 +146,10 @@ class KalenderKonto extends IPSModuleStrict
             $payload = match ($operation) {
                 'GetCalendars'      => json_decode($this->GetCalendars(), true, 512, JSON_THROW_ON_ERROR),
                 'DiscoverCalendars' => $this->discoverCalendars(),
+                'GetEvents'         => $this->getEventsForChild($request),
+                'CreateEvent'       => $this->createEventForChild($request),
+                'UpdateEvent'       => $this->updateEventForChild($request),
+                'DeleteEvent'       => ['success' => $this->deleteEventForChild($request)],
                 'Synchronize'       => ['success' => $this->Synchronize()],
                 'TestConnection'    => json_decode($this->TestConnection(), true, 512, JSON_THROW_ON_ERROR),
                 default             => throw new InvalidArgumentException('Unsupported operation: ' . $operation)
@@ -297,6 +301,110 @@ class KalenderKonto extends IPSModuleStrict
         $this->WriteAttributeString('LastError', '');
 
         return $calendars;
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return list<array<string, mixed>>
+     */
+    private function getEventsForChild(array $request): array
+    {
+        $calendar = $this->resolveCalendar((string) ($request['CalendarID'] ?? ''));
+        $startTimestamp = (int) ($request['Start'] ?? 0);
+        $endTimestamp = (int) ($request['End'] ?? 0);
+        if ($startTimestamp <= 0 || $endTimestamp <= $startTimestamp) {
+            throw new InvalidArgumentException('The requested event time range is invalid.');
+        }
+        if (($endTimestamp - $startTimestamp) > 6 * 366 * 86400) {
+            throw new InvalidArgumentException('The requested event time range is too large.');
+        }
+
+        return $this->createProvider()->getEvents(
+            (string) $calendar['url'],
+            new DateTimeImmutable('@' . $startTimestamp),
+            new DateTimeImmutable('@' . $endTimestamp)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return array<string, mixed>
+     */
+    private function createEventForChild(array $request): array
+    {
+        $calendar = $this->resolveCalendar((string) ($request['CalendarID'] ?? ''));
+        $event = $request['Event'] ?? null;
+        if (!is_array($event)) {
+            throw new InvalidArgumentException('The event data is invalid.');
+        }
+
+        return $this->createProvider()->createEvent((string) $calendar['url'], $event);
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     * @return array<string, mixed>
+     */
+    private function updateEventForChild(array $request): array
+    {
+        $calendar = $this->resolveCalendar((string) ($request['CalendarID'] ?? ''));
+        $event = $request['Event'] ?? null;
+        if (!is_array($event)) {
+            throw new InvalidArgumentException('The event data is invalid.');
+        }
+
+        return $this->createProvider()->updateEvent(
+            (string) $calendar['url'],
+            trim((string) ($request['ResourceURL'] ?? '')),
+            trim((string) ($request['ETag'] ?? '')),
+            trim((string) ($request['UID'] ?? '')),
+            $event
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     */
+    private function deleteEventForChild(array $request): bool
+    {
+        $calendar = $this->resolveCalendar((string) ($request['CalendarID'] ?? ''));
+
+        return $this->createProvider()->deleteEvent(
+            (string) $calendar['url'],
+            trim((string) ($request['ResourceURL'] ?? '')),
+            trim((string) ($request['ETag'] ?? '')),
+            trim((string) ($request['RecurrenceID'] ?? ''))
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resolveCalendar(string $calendarId): array
+    {
+        if ($calendarId === '') {
+            throw new InvalidArgumentException('The calendar ID is missing.');
+        }
+
+        $calendars = json_decode($this->ReadAttributeString('CachedCalendars'), true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($calendars)) {
+            $calendars = [];
+        }
+        foreach ($calendars as $calendar) {
+            if (is_array($calendar) && (string) ($calendar['id'] ?? '') === $calendarId
+                && trim((string) ($calendar['url'] ?? '')) !== '') {
+                return $calendar;
+            }
+        }
+
+        foreach ($this->discoverCalendars() as $calendar) {
+            if ((string) ($calendar['id'] ?? '') === $calendarId
+                && trim((string) ($calendar['url'] ?? '')) !== '') {
+                return $calendar;
+            }
+        }
+
+        throw new RuntimeException('The selected calendar is no longer available in this account.');
     }
 
     private function createProvider(): CalendarProviderInterface

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace IPSKalender;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use DOMDocument;
 use DOMElement;
 use DOMNode;
@@ -12,6 +14,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/CalendarProviderInterface.php';
 require_once __DIR__ . '/CalendarHttpClient.php';
+require_once __DIR__ . '/ICalendarCodec.php';
 
 final class CalDAVProviderException extends RuntimeException
 {
@@ -61,6 +64,149 @@ final class CalDAVProvider implements CalendarProviderInterface
         }
 
         throw $lastException ?? new CalDAVProviderException('CalDAV discovery failed.');
+    }
+
+    public function getEvents(string $calendarUrl, DateTimeImmutable $start, DateTimeImmutable $end): array
+    {
+        if ($end <= $start) {
+            throw new CalDAVProviderException('The event query end must be later than the start.');
+        }
+
+        $calendarUrl = $this->normalizeAbsoluteUrl($calendarUrl);
+        $utc = new DateTimeZone('UTC');
+        $startValue = $start->setTimezone($utc)->format('Ymd\THis\Z');
+        $endValue = $end->setTimezone($utc)->format('Ymd\THis\Z');
+        $body = '<?xml version="1.0" encoding="utf-8" ?>' .
+            '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">' .
+            '<d:prop><d:getetag/><c:calendar-data><c:expand start="' . $startValue . '" end="' . $endValue . '"/>' .
+            '</c:calendar-data></d:prop>' .
+            '<c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT">' .
+            '<c:time-range start="' . $startValue . '" end="' . $endValue . '"/>' .
+            '</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>';
+
+        $response = $this->httpClient->request(
+            'REPORT',
+            $calendarUrl,
+            [
+                'Accept'       => 'application/xml, text/xml',
+                'Content-Type' => 'application/xml; charset=utf-8',
+                'Depth'        => '1'
+            ],
+            $body
+        );
+        $this->assertResponseStatus($response, [207], 'calendar query');
+
+        $document = $this->parseXml($response->body);
+        $xpath = new DOMXPath($document);
+        $xpath->registerNamespace('d', self::DAV_NAMESPACE);
+        $xpath->registerNamespace('c', self::CALDAV_NAMESPACE);
+        $events = [];
+        $responses = $xpath->query('//d:multistatus/d:response');
+        if ($responses === false) {
+            return [];
+        }
+
+        foreach ($responses as $eventResponse) {
+            if (!$eventResponse instanceof DOMElement) {
+                continue;
+            }
+            $href = $this->firstNodeValue($xpath, './d:href', $eventResponse);
+            $calendarData = $this->firstNodeValue($xpath, './/c:calendar-data', $eventResponse);
+            if ($href === '' || $calendarData === '') {
+                continue;
+            }
+            $resourceUrl = $this->resolveUrl($response->effectiveUrl, $href);
+            $this->assertResourceBelongsToCalendar($calendarUrl, $resourceUrl);
+            $etag = $this->firstNodeValue($xpath, './/d:getetag', $eventResponse);
+            array_push($events, ...ICalendarCodec::parseEvents($calendarData, $resourceUrl, $etag));
+        }
+
+        usort(
+            $events,
+            static fn(array $left, array $right): int => ($left['startTimestamp'] <=> $right['startTimestamp'])
+                ?: strcasecmp((string) $left['summary'], (string) $right['summary'])
+        );
+
+        return $events;
+    }
+
+    public function createEvent(string $calendarUrl, array $event): array
+    {
+        $calendarUrl = $this->normalizeAbsoluteUrl($calendarUrl);
+        $created = ICalendarCodec::createEvent($event);
+        $resourceUrl = rtrim($calendarUrl, '/') . '/' . rawurlencode($created['uid']) . '.ics';
+        $response = $this->httpClient->request(
+            'PUT',
+            $resourceUrl,
+            [
+                'Content-Type'  => 'text/calendar; charset=utf-8',
+                'If-None-Match' => '*'
+            ],
+            $created['ical']
+        );
+        $this->assertResponseStatus($response, [200, 201, 204], 'event creation');
+
+        return [
+            'uid'         => $created['uid'],
+            'resourceUrl' => $response->effectiveUrl !== '' ? $response->effectiveUrl : $resourceUrl,
+            'etag'        => (string) ($response->headers['etag'] ?? '')
+        ];
+    }
+
+    public function updateEvent(
+        string $calendarUrl,
+        string $resourceUrl,
+        string $etag,
+        string $uid,
+        array $event
+    ): array {
+        $calendarUrl = $this->normalizeAbsoluteUrl($calendarUrl);
+        $resourceUrl = $this->normalizeAbsoluteUrl($resourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $resourceUrl);
+        if ($uid === '') {
+            throw new CalDAVProviderException('The event UID is missing.');
+        }
+
+        $getResponse = $this->httpClient->request('GET', $resourceUrl, ['Accept' => 'text/calendar']);
+        $this->assertResponseStatus($getResponse, [200], 'event retrieval');
+        $updatedIcal = ICalendarCodec::updateEvent($getResponse->body, $uid, $event);
+        $currentEtag = $etag !== '' ? $etag : (string) ($getResponse->headers['etag'] ?? '');
+        $headers = ['Content-Type' => 'text/calendar; charset=utf-8'];
+        if ($currentEtag !== '') {
+            $headers['If-Match'] = $currentEtag;
+        }
+
+        $putResponse = $this->httpClient->request('PUT', $resourceUrl, $headers, $updatedIcal);
+        $this->assertResponseStatus($putResponse, [200, 201, 204], 'event update');
+
+        return [
+            'uid'         => $uid,
+            'resourceUrl' => $putResponse->effectiveUrl !== '' ? $putResponse->effectiveUrl : $resourceUrl,
+            'etag'        => (string) ($putResponse->headers['etag'] ?? '')
+        ];
+    }
+
+    public function deleteEvent(
+        string $calendarUrl,
+        string $resourceUrl,
+        string $etag,
+        string $recurrenceId = ''
+    ): bool {
+        if ($recurrenceId !== '') {
+            throw new CalDAVProviderException('Individual occurrences of recurring events cannot be deleted yet.');
+        }
+
+        $calendarUrl = $this->normalizeAbsoluteUrl($calendarUrl);
+        $resourceUrl = $this->normalizeAbsoluteUrl($resourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $resourceUrl);
+        $headers = [];
+        if ($etag !== '') {
+            $headers['If-Match'] = $etag;
+        }
+        $response = $this->httpClient->request('DELETE', $resourceUrl, $headers);
+        $this->assertResponseStatus($response, [200, 204], 'event deletion');
+
+        return true;
     }
 
     private function discoverPrincipal(string $url): string
@@ -228,6 +374,67 @@ final class CalDAVProvider implements CalendarProviderInterface
         }
 
         return $response;
+    }
+
+    /**
+     * @param list<int> $expectedStatusCodes
+     */
+    private function assertResponseStatus(
+        CalendarHttpResponse $response,
+        array $expectedStatusCodes,
+        string $operation
+    ): void {
+        if (in_array($response->statusCode, [401, 403], true)) {
+            throw new CalDAVProviderException('Authentication failed or calendar access was denied.', $response->statusCode);
+        }
+        if ($response->statusCode === 412) {
+            throw new CalDAVProviderException(
+                'The event was changed by another client. Synchronize the calendar and try again.',
+                412
+            );
+        }
+        if (!in_array($response->statusCode, $expectedStatusCodes, true)) {
+            throw new CalDAVProviderException(
+                sprintf('Unexpected CalDAV response during %s: HTTP %d.', $operation, $response->statusCode),
+                $response->statusCode
+            );
+        }
+    }
+
+    private function normalizeAbsoluteUrl(string $url): string
+    {
+        $url = trim($url);
+        $parts = parse_url($url);
+        if ($parts === false || !isset($parts['scheme'], $parts['host'])
+            || !in_array(strtolower($parts['scheme']), ['http', 'https'], true)) {
+            throw new CalDAVProviderException('The CalDAV resource URL is invalid.');
+        }
+        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
+            throw new CalDAVProviderException('Credentials and fragments are not allowed in CalDAV resource URLs.');
+        }
+
+        return $url;
+    }
+
+    private function assertResourceBelongsToCalendar(string $calendarUrl, string $resourceUrl): void
+    {
+        $calendar = parse_url($calendarUrl);
+        $resource = parse_url($resourceUrl);
+        if ($calendar === false || $resource === false) {
+            throw new CalDAVProviderException('The CalDAV resource URL is invalid.');
+        }
+
+        $calendarPort = $calendar['port'] ?? (strtolower((string) ($calendar['scheme'] ?? '')) === 'https' ? 443 : 80);
+        $resourcePort = $resource['port'] ?? (strtolower((string) ($resource['scheme'] ?? '')) === 'https' ? 443 : 80);
+        $calendarPath = rtrim((string) ($calendar['path'] ?? '/'), '/') . '/';
+        $resourcePath = (string) ($resource['path'] ?? '/');
+
+        if (strcasecmp((string) ($calendar['scheme'] ?? ''), (string) ($resource['scheme'] ?? '')) !== 0
+            || strcasecmp((string) ($calendar['host'] ?? ''), (string) ($resource['host'] ?? '')) !== 0
+            || $calendarPort !== $resourcePort
+            || !str_starts_with($resourcePath, $calendarPath)) {
+            throw new CalDAVProviderException('The event resource does not belong to the configured calendar.');
+        }
     }
 
     private function parseXml(string $xml): DOMDocument
