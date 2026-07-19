@@ -23,6 +23,8 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyBoolean('ShowLocation', true);
         $this->RegisterPropertyBoolean('ShowDescription', false);
         $this->RegisterPropertyBoolean('EnableIPSView', false);
+        $this->RegisterPropertyBoolean('IPSViewTransparent', true);
+        $this->RegisterPropertyInteger('IPSViewTheme', 0);
 
         $this->SetVisualizationType(1);
     }
@@ -233,7 +235,20 @@ class KalenderAnsicht extends IPSModuleStrict
 
         $translations = [];
         if ($ipsView) {
-            $html = str_replace('<html lang="en">', '<html lang="de" class="ipsview-mode">', $html);
+            $classes = ['ipsview-mode'];
+            if ($this->ReadPropertyBoolean('IPSViewTransparent')) {
+                $classes[] = 'ipsview-transparent';
+            }
+            $classes[] = match ($this->ReadPropertyInteger('IPSViewTheme')) {
+                1       => 'ipsview-light',
+                2       => 'ipsview-dark',
+                default => 'ipsview-auto'
+            };
+            $html = str_replace(
+                '<html lang="en">',
+                '<html lang="de" class="' . implode(' ', $classes) . '">',
+                $html
+            );
             foreach ([
                 'Agenda', '3 Days', 'Week', 'Month', 'Previous', 'Today', 'Next', 'Refresh',
                 'No calendars selected', 'Select at least one calendar in the instance configuration.',

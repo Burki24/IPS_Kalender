@@ -9,6 +9,7 @@
             --tile-title-clearance: 58px;
             --cal-text: var(--content-color, light-dark(#18202f, #f3f6fb));
             --cal-card: var(--card-color, light-dark(#ffffff, #111111));
+            --cal-dialog: var(--card-color, light-dark(#ffffff, #111111));
             --cal-muted: color-mix(in srgb, currentColor 58%, transparent);
             --cal-border: color-mix(in srgb, currentColor 14%, transparent);
             --cal-surface: color-mix(in srgb, currentColor 7%, transparent);
@@ -32,6 +33,40 @@
         }
 
         html.ipsview-mode { --tile-title-clearance: 0px; }
+        html.ipsview-mode.ipsview-light {
+            color-scheme: light;
+            --cal-text: #18202f;
+            --cal-card: #ffffff;
+            --cal-dialog: #ffffff;
+        }
+        html.ipsview-mode.ipsview-dark {
+            color-scheme: dark;
+            --cal-text: #f3f6fb;
+            --cal-card: #111111;
+            --cal-dialog: #111111;
+        }
+        @media (prefers-color-scheme: light) {
+            html.ipsview-mode.ipsview-auto {
+                --cal-text: #18202f;
+                --cal-card: #ffffff;
+                --cal-dialog: #ffffff;
+            }
+        }
+        @media (prefers-color-scheme: dark) {
+            html.ipsview-mode.ipsview-auto {
+                --cal-text: #f3f6fb;
+                --cal-card: #111111;
+                --cal-dialog: #111111;
+            }
+        }
+        html.ipsview-mode.ipsview-transparent {
+            --cal-card: transparent;
+            background: transparent !important;
+        }
+        html.ipsview-mode.ipsview-transparent body,
+        html.ipsview-mode.ipsview-transparent #calendar-app {
+            background: transparent !important;
+        }
         html.ipsview-mode #refresh-button,
         html.ipsview-mode #add-button { display: none !important; }
 
@@ -298,7 +333,7 @@
             overflow: hidden;
             border: 1px solid var(--cal-border);
             border-radius: 15px;
-            background: var(--cal-card);
+            background: var(--cal-dialog);
             color: var(--cal-text);
             box-shadow: 0 18px 50px rgba(0,0,0,.35);
         }
@@ -318,7 +353,7 @@
             color: inherit;
         }
         .form-row select option {
-            background-color: var(--cal-card);
+            background-color: var(--cal-dialog);
             color: var(--cal-text);
         }
         .form-row textarea { min-height: 62px; resize: vertical; }

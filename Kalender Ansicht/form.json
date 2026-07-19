@@ -110,6 +110,30 @@
             "type": "CheckBox",
             "name": "EnableIPSView",
             "caption": "Provide IPSView HTMLBox"
+        },
+        {
+            "type": "CheckBox",
+            "name": "IPSViewTransparent",
+            "caption": "Transparent IPSView background"
+        },
+        {
+            "type": "Select",
+            "name": "IPSViewTheme",
+            "caption": "IPSView contrast",
+            "options": [
+                {
+                    "caption": "Automatic",
+                    "value": 0
+                },
+                {
+                    "caption": "Light background",
+                    "value": 1
+                },
+                {
+                    "caption": "Dark background",
+                    "value": 2
+                }
+            ]
         }
     ],
     "actions": [

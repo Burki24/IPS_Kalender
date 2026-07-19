@@ -33,11 +33,15 @@ Wiederkehrende, vom CalDAV-Server expandierte Einzeltermine werden derzeit nur l
 ### IPSView
 
 1. In der Instanz **Kalender Ansicht** die Option **IPSView-HTMLBox bereitstellen** aktivieren und die Änderungen übernehmen.
-2. Unterhalb der Instanz wird die String-Variable **IPSView-Kalender** mit dem Profil `~HTMLBox` angelegt.
-3. Im IPSView Designer ein Steuerelement vom Typ **HTML-Box** einfügen und diese Variable als ID auswählen.
-4. Als HTML Renderer **Browser des Clients** oder **Automatisch** verwenden. Der native einfache HTML Renderer reicht nicht aus, weil Ansichtswechsel und Navigation JavaScript verwenden.
+2. Mit **Transparenter IPSView-Hintergrund** festlegen, ob die Oberfläche der umgebenden View sichtbar bleiben soll.
+3. Unter **IPSView-Kontrast** die Darstellung an den Hintergrund anpassen. **Heller Hintergrund** erzeugt dunkle Schrift, **Dunkler Hintergrund** helle Schrift. **Automatisch** übernimmt das Farbschema des Endgeräts.
+4. Unterhalb der Instanz wird die String-Variable **IPSView-Kalender** mit dem Profil `~HTMLBox` angelegt.
+5. Im IPSView Designer ein Steuerelement vom Typ **HTML-Box** einfügen und diese Variable als ID auswählen.
+6. Als HTML Renderer **Browser des Clients** oder **Automatisch** verwenden. Der native einfache HTML Renderer reicht nicht aus, weil Ansichtswechsel und Navigation JavaScript verwenden.
 
 Agenda, 3-Tage-, Wochen- und Monatsansicht sowie die Navigation funktionieren direkt innerhalb der IPSView-HTMLBox. Die Variable wird bei Änderungen oder Synchronisationen der ausgewählten Kalender automatisch neu erzeugt. Das Öffnen von Termindetails ist lesend möglich. Erstellen, Bearbeiten, Löschen und die manuelle Synchronisationsschaltfläche bleiben der Symcon-Kachel vorbehalten, da die IPSView-HTMLBox keine Symcon-HTML-SDK-Aktionsbrücke bereitstellt.
+
+Die HTMLBox kann den Hintergrund der umgebenden IPSView nicht auslesen, da sie in einem eigenen Browserbereich ausgeführt wird. Deshalb ist der Kontrast unabhängig von der Transparenz einstellbar. Bei älteren IPSView-Clients oder nativen Renderern kann der Browserbereich trotz transparentem HTML einen eigenen Hintergrund zeichnen; in diesem Fall den aktuellen Browser-Renderer des Clients verwenden.
 
 Über `Kalender synchronisieren` kann die Verbindung bereits in der Konfiguration geprüft werden. Neu vom Konfigurator angelegte Kalender übernehmen Farbe und Schreibberechtigung automatisch. Bei Kalenderinstanzen, die vor Einführung dieser Eigenschaften angelegt wurden, die Konfiguration über den Kalender-Konfigurator einmal neu anwenden.
 
