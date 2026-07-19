@@ -6,6 +6,7 @@
     <style>
         :root {
             color-scheme: light dark;
+            --tile-title-clearance: 58px;
             --cal-text: light-dark(#18202f, #f3f6fb);
             --cal-muted: color-mix(in srgb, currentColor 58%, transparent);
             --cal-border: color-mix(in srgb, currentColor 14%, transparent);
@@ -44,8 +45,8 @@
             display: flex;
             align-items: center;
             gap: 7px;
-            min-height: 42px;
-            padding: 3px 2px 8px;
+            min-height: calc(42px + var(--tile-title-clearance));
+            padding: calc(3px + var(--tile-title-clearance)) 10px 8px;
             border-bottom: 1px solid var(--cal-border);
         }
 
@@ -140,6 +141,7 @@
         .event-card {
             position: relative;
             display: grid;
+            width: calc(100% - 4px);
             grid-template-columns: 5px minmax(54px, 72px) 1fr;
             gap: 9px;
             margin: 4px 2px;
@@ -306,7 +308,28 @@
         .danger-button { border-color: color-mix(in srgb, var(--cal-danger) 60%, transparent); background: color-mix(in srgb, var(--cal-danger) 15%, transparent); color: var(--cal-danger); }
         .hidden { display: none !important; }
 
+        :fullscreen {
+            --tile-title-clearance: 0px;
+        }
+
         @media (max-width: 560px) {
+            .toolbar {
+                display: grid;
+                grid-template-areas:
+                    "navigation period refresh"
+                    "views views views";
+                grid-template-columns: auto minmax(0, 1fr) auto;
+                min-height: calc(78px + var(--tile-title-clearance));
+            }
+            .toolbar > .toolbar-group:first-child { grid-area: navigation; }
+            .toolbar-title { grid-area: period; }
+            .toolbar-spacer { display: none; }
+            #view-buttons {
+                display: grid;
+                grid-area: views;
+                grid-template-columns: repeat(3, 1fr);
+            }
+            #refresh-button { grid-area: refresh; }
             .view-button { padding-inline: 6px; font-size: .7rem; }
             .toolbar-title { font-size: .82rem; }
             .event-card { grid-template-columns: 4px 54px 1fr; gap: 7px; }
