@@ -270,6 +270,10 @@ class Kalender extends IPSModuleStrict
      */
     private function sendRequest(string $operation, array $additionalData = []): array
     {
+        if (!$this->HasActiveParent()) {
+            throw new RuntimeException('No active calendar account is connected.');
+        }
+
         $request = array_merge(
             [
                 'DataID'     => self::DATA_ID_TO_PARENT,
