@@ -1,0 +1,116 @@
+{
+    "elements": [
+        {
+            "type": "CheckBox",
+            "name": "Active",
+            "caption": "Active"
+        },
+        {
+            "type": "Select",
+            "name": "Provider",
+            "caption": "Provider",
+            "options": [
+                {
+                    "caption": "Apple iCloud",
+                    "value": 0
+                },
+                {
+                    "caption": "CalDAV",
+                    "value": 1
+                },
+                {
+                    "caption": "Google Calendar (planned)",
+                    "value": 2
+                },
+                {
+                    "caption": "Microsoft 365 (planned)",
+                    "value": 3
+                },
+                {
+                    "caption": "ICS/Webcal (planned)",
+                    "value": 4
+                }
+            ]
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ServerURL",
+            "caption": "Server URL",
+            "validate": "^$|^https?://.+"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "Username",
+            "caption": "Username"
+        },
+        {
+            "type": "PasswordTextBox",
+            "name": "Password",
+            "caption": "Password"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "UpdateInterval",
+            "caption": "Update interval",
+            "suffix": " minutes",
+            "minimum": 1
+        },
+        {
+            "type": "CheckBox",
+            "name": "VerifyTLS",
+            "caption": "Verify TLS certificate"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "RequestTimeout",
+            "caption": "Request timeout",
+            "suffix": " seconds",
+            "minimum": 5,
+            "maximum": 120
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Test connection",
+            "onClick": "echo IPSKALACC_TestConnection($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Synchronize now",
+            "onClick": "echo IPSKALACC_Synchronize($id) ? 'Synchronization successful.' : 'Synchronization failed.';"
+        },
+        {
+            "type": "Button",
+            "caption": "Show account status",
+            "onClick": "echo IPSKALACC_GetAccountStatus($id);"
+        }
+    ],
+    "status": [
+        {
+            "code": 201,
+            "icon": "error",
+            "caption": "Configuration incomplete"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "Authentication failed"
+        },
+        {
+            "code": 203,
+            "icon": "error",
+            "caption": "Connection failed"
+        },
+        {
+            "code": 204,
+            "icon": "inactive",
+            "caption": "Provider not implemented yet"
+        },
+        {
+            "code": 205,
+            "icon": "error",
+            "caption": "Invalid provider response"
+        }
+    ]
+}

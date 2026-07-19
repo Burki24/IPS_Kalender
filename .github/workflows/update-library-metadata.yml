@@ -1,0 +1,60 @@
+name: Update Library Metadata
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: write
+
+jobs:
+  update-library-metadata:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip metadata]')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout module
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Check current library metadata
+        id: metadata
+        shell: bash
+        run: |
+          commit_count="$(git rev-list --count HEAD)"
+          library_build="$(php -r '$library = json_decode(file_get_contents("library.json"), true); echo (int) ($library["build"] ?? -1);')"
+
+          echo "commit_count=${commit_count}" >> "${GITHUB_OUTPUT}"
+          echo "library_build=${library_build}" >> "${GITHUB_OUTPUT}"
+
+          if [ "${library_build}" = "${commit_count}" ]; then
+            echo "current=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "current=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Update library metadata
+        if: steps.metadata.outputs.current != 'true'
+        run: php .github/scripts/update-library-metadata.php --next-build
+
+      - name: Commit library metadata
+        if: steps.metadata.outputs.current != 'true'
+        shell: bash
+        run: |
+          if git diff --quiet -- library.json; then
+            echo "library.json is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add library.json
+          git commit -m "CHORE: update library metadata [skip metadata]"
+          git push origin HEAD:${{ github.ref_name }}

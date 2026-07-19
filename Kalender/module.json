@@ -1,0 +1,16 @@
+{
+    "id": "{227B63E4-4223-316B-76E9-FD3849689562}",
+    "name": "Kalender",
+    "type": 3,
+    "vendor": "Burkhard Kneiseler",
+    "aliases": [],
+    "parentRequirements": [
+        "{4E535B1D-69C7-AC77-1372-0282B21BAEC9}"
+    ],
+    "childRequirements": [],
+    "implemented": [
+        "{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}"
+    ],
+    "prefix": "IPSKAL",
+    "url": ""
+}

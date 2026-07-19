@@ -1,0 +1,16 @@
+{
+    "id": "{966D6119-7FF3-5CA5-06C3-536FBF8100C4}",
+    "name": "Kalender Konto",
+    "type": 2,
+    "vendor": "Burkhard Kneiseler",
+    "aliases": [],
+    "parentRequirements": [],
+    "childRequirements": [
+        "{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}"
+    ],
+    "implemented": [
+        "{4E535B1D-69C7-AC77-1372-0282B21BAEC9}"
+    ],
+    "prefix": "IPSKALACC",
+    "url": ""
+}
