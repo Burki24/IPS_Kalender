@@ -144,10 +144,11 @@ class KalenderKonto extends IPSModuleStrict
             $requestID = (string) ($request['RequestID'] ?? '');
 
             $payload = match ($operation) {
-                'GetCalendars'   => json_decode($this->GetCalendars(), true, 512, JSON_THROW_ON_ERROR),
-                'Synchronize'    => ['success' => $this->Synchronize()],
-                'TestConnection' => json_decode($this->TestConnection(), true, 512, JSON_THROW_ON_ERROR),
-                default          => throw new InvalidArgumentException('Unsupported operation: ' . $operation)
+                'GetCalendars'      => json_decode($this->GetCalendars(), true, 512, JSON_THROW_ON_ERROR),
+                'DiscoverCalendars' => $this->discoverCalendars(),
+                'Synchronize'       => ['success' => $this->Synchronize()],
+                'TestConnection'    => json_decode($this->TestConnection(), true, 512, JSON_THROW_ON_ERROR),
+                default             => throw new InvalidArgumentException('Unsupported operation: ' . $operation)
             };
 
             return $this->encodeResponse(true, $operation, $requestID, $payload);
@@ -225,16 +226,7 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         try {
-            $provider = $this->createProvider();
-            $calendars = $provider->getCalendars();
-            $encodedCalendars = json_encode(
-                $calendars,
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
-            );
-
-            $this->WriteAttributeString('CachedCalendars', $encodedCalendars);
-            $this->WriteAttributeInteger('LastSynchronization', time());
-            $this->WriteAttributeString('LastError', '');
+            $calendars = $this->discoverCalendars();
             $this->SetStatus(IS_ACTIVE);
 
             $this->SendDataToChildren(json_encode(
@@ -277,6 +269,34 @@ class KalenderKonto extends IPSModuleStrict
         $this->WriteAttributeString('CachedCalendars', '[]');
         $this->WriteAttributeInteger('LastSynchronization', 0);
         $this->WriteAttributeString('LastError', '');
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function discoverCalendars(): array
+    {
+        $validationError = $this->validateConfiguration();
+        if ($validationError !== '') {
+            throw new InvalidArgumentException($validationError);
+        }
+
+        if (!$this->isProviderImplemented($this->ReadPropertyInteger('Provider'))) {
+            throw new RuntimeException('The selected provider is not implemented yet.');
+        }
+
+        $calendars = $this->createProvider()->getCalendars();
+        $this->WriteAttributeString(
+            'CachedCalendars',
+            json_encode(
+                $calendars,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            )
+        );
+        $this->WriteAttributeInteger('LastSynchronization', time());
+        $this->WriteAttributeString('LastError', '');
+
+        return $calendars;
     }
 
     private function createProvider(): CalendarProviderInterface

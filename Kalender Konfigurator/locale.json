@@ -1,8 +1,16 @@
 {
     "translations": {
         "de": {
-            "Translation 1": "Übersetzung 1",
-            "Translation 2": "Übersetzung 2"
+            "Available calendars": "Verfügbare Kalender",
+            "Calendar": "Kalender",
+            "Color": "Farbe",
+            "Access": "Zugriff",
+            "Read and write": "Lesen und Schreiben",
+            "Read only": "Nur Lesen",
+            "Not found": "Nicht gefunden",
+            "Refresh calendars": "Kalender aktualisieren",
+            "Calendar discovery failed": "Kalendersuche fehlgeschlagen",
+            "%d calendars found.": "%d Kalender gefunden."
         }
     }
 }

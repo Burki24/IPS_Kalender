@@ -1,5 +1,47 @@
 {
-    "elements": [],
-    "actions": [],
-    "status": []
+    "elements": [
+        {
+            "type": "Configurator",
+            "name": "Calendars",
+            "caption": "Available calendars",
+            "delete": true,
+            "rowCount": 15,
+            "columns": [
+                {
+                    "caption": "Calendar",
+                    "name": "name",
+                    "width": "auto"
+                },
+                {
+                    "caption": "Color",
+                    "name": "color",
+                    "width": "100px"
+                },
+                {
+                    "caption": "Access",
+                    "name": "access",
+                    "width": "130px"
+                }
+            ],
+            "sort": {
+                "column": "name",
+                "direction": "ascending"
+            },
+            "values": []
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Refresh calendars",
+            "onClick": "echo IPSKALCFG_RefreshCalendars($id);"
+        }
+    ],
+    "status": [
+        {
+            "code": 201,
+            "icon": "error",
+            "caption": "Calendar discovery failed"
+        }
+    ]
 }

@@ -1,8 +1,10 @@
 {
     "translations": {
         "de": {
-            "Translation 1": "Übersetzung 1",
-            "Translation 2": "Übersetzung 2"
+            "Calendar ID": "Kalender-ID",
+            "Provider calendar ID": "Kalender-ID des Anbieters",
+            "Calendar URL": "Kalender-URL",
+            "Configuration incomplete": "Konfiguration unvollständig"
         }
     }
 }
