@@ -186,7 +186,9 @@ class KalenderKonfigurator extends IPSModuleStrict
                     'configuration' => [
                         'CalendarID'         => $calendarId,
                         'ProviderCalendarID' => (string) ($calendar['providerId'] ?? $calendarId),
-                        'CalendarURL'        => (string) ($calendar['url'] ?? '')
+                        'CalendarURL'        => (string) ($calendar['url'] ?? ''),
+                        'CalendarColor'      => (string) ($calendar['color'] ?? ''),
+                        'CanWrite'           => $canWrite
                     ]
                 ]
             ];

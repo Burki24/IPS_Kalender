@@ -1,23 +1,352 @@
 <?php
 
 declare(strict_types=1);
-	class KalenderAnsicht extends IPSModule
-	{
-		public function Create()
-		{
-			//Never delete this line!
-			parent::Create();
-		}
 
-		public function Destroy()
-		{
-			//Never delete this line!
-			parent::Destroy();
-		}
+class KalenderAnsicht extends IPSModuleStrict
+{
+    private const CALENDAR_MODULE_ID = '{227B63E4-4223-316B-76E9-FD3849689562}';
 
-		public function ApplyChanges()
-		{
-			//Never delete this line!
-			parent::ApplyChanges();
-		}
-	}
+    private const STATUS_NO_CALENDARS = 201;
+    private const STATUS_INVALID_CONFIGURATION = 202;
+
+    public function Create(): void
+    {
+        parent::Create();
+
+        $this->RegisterPropertyString('Calendars', '[]');
+        $this->RegisterPropertyInteger('DefaultView', 0);
+        $this->RegisterPropertyInteger('PastDays', 0);
+        $this->RegisterPropertyInteger('FutureDays', 31);
+        $this->RegisterPropertyInteger('MaxEvents', 250);
+        $this->RegisterPropertyBoolean('ShowWeekends', true);
+        $this->RegisterPropertyBoolean('ShowCalendarName', true);
+        $this->RegisterPropertyBoolean('ShowLocation', true);
+        $this->RegisterPropertyBoolean('ShowDescription', false);
+
+        $this->SetVisualizationType(1);
+    }
+
+    public function ApplyChanges(): void
+    {
+        parent::ApplyChanges();
+
+        foreach ($this->GetMessageList() as $senderId => $messageIds) {
+            foreach ($messageIds as $messageId) {
+                $this->UnregisterMessage($senderId, $messageId);
+            }
+        }
+
+        try {
+            $calendars = $this->getSelectedCalendars();
+            foreach ($calendars as $calendar) {
+                $instanceId = $calendar['instanceId'];
+                $this->RegisterMessage($instanceId, OM_CHANGENAME);
+                $eventsVariableId = $this->findChildByIdent($instanceId, 'Events');
+                if ($eventsVariableId > 0) {
+                    $this->RegisterMessage($eventsVariableId, VM_UPDATE);
+                }
+            }
+
+            $this->SetStatus($calendars === [] ? self::STATUS_NO_CALENDARS : IS_ACTIVE);
+        } catch (Throwable $exception) {
+            $this->SendDebug('Configuration', $exception->getMessage(), 0);
+            $this->SetStatus(self::STATUS_INVALID_CONFIGURATION);
+        }
+
+        $this->broadcastState();
+    }
+
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        $this->broadcastState();
+    }
+
+    public function GetVisualizationTile(): string
+    {
+        $html = file_get_contents(__DIR__ . '/module.html');
+        if ($html === false) {
+            return '';
+        }
+
+        return $html . '<script>handleMessage(' . json_encode(
+            $this->getFullUpdateMessage(),
+            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+        ) . ');</script>';
+    }
+
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        try {
+            switch ($Ident) {
+                case 'Refresh':
+                    $success = $this->SynchronizeCalendars();
+                    $this->sendToast(
+                        $success ? 'success' : 'error',
+                        $success ? $this->Translate('Calendars synchronized.') : $this->Translate('Synchronization failed.')
+                    );
+                    break;
+
+                case 'CreateEvent':
+                    $request = $this->decodeActionValue($Value);
+                    $instanceId = $this->requireWritableCalendar($request);
+                    $event = $request['event'] ?? null;
+                    if (!is_array($event)) {
+                        throw new InvalidArgumentException('The event data is invalid.');
+                    }
+                    $result = json_decode(
+                        IPSKAL_CreateEvent(
+                            $instanceId,
+                            json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+                        ),
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    );
+                    if (!is_array($result) || !($result['success'] ?? false)) {
+                        throw new RuntimeException((string) ($result['error'] ?? 'Event creation failed.'));
+                    }
+                    $this->sendToast('success', $this->Translate('Event created.'));
+                    $this->broadcastState();
+                    break;
+
+                case 'UpdateEvent':
+                    $request = $this->decodeActionValue($Value);
+                    $instanceId = $this->requireWritableCalendar($request);
+                    $event = $request['event'] ?? null;
+                    if (!is_array($event)) {
+                        throw new InvalidArgumentException('The event data is invalid.');
+                    }
+                    $result = json_decode(
+                        IPSKAL_UpdateEvent(
+                            $instanceId,
+                            json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+                        ),
+                        true,
+                        512,
+                        JSON_THROW_ON_ERROR
+                    );
+                    if (!is_array($result) || !($result['success'] ?? false)) {
+                        throw new RuntimeException((string) ($result['error'] ?? 'Event update failed.'));
+                    }
+                    $this->sendToast('success', $this->Translate('Event updated.'));
+                    $this->broadcastState();
+                    break;
+
+                case 'DeleteEvent':
+                    $request = $this->decodeActionValue($Value);
+                    $instanceId = $this->requireWritableCalendar($request);
+                    $event = $request['event'] ?? null;
+                    if (!is_array($event)) {
+                        throw new InvalidArgumentException('The event data is invalid.');
+                    }
+                    if (!IPSKAL_DeleteEvent(
+                        $instanceId,
+                        json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+                    )) {
+                        throw new RuntimeException('Event deletion failed.');
+                    }
+                    $this->sendToast('success', $this->Translate('Event deleted.'));
+                    $this->broadcastState();
+                    break;
+
+                default:
+                    throw new InvalidArgumentException('Unsupported visualization action: ' . $Ident);
+            }
+        } catch (Throwable $exception) {
+            $this->SendDebug('VisualizationAction', $exception->getMessage(), 0);
+            $this->sendToast('error', $exception->getMessage());
+        }
+    }
+
+    public function SynchronizeCalendars(): bool
+    {
+        $success = true;
+        foreach ($this->getSelectedCalendars() as $calendar) {
+            if (!IPSKAL_Synchronize($calendar['instanceId'])) {
+                $success = false;
+            }
+        }
+        $this->broadcastState();
+        return $success;
+    }
+
+    public function GetAggregatedEvents(): string
+    {
+        return json_encode(
+            $this->buildState(),
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+    }
+
+    private function broadcastState(): void
+    {
+        try {
+            $this->UpdateVisualizationValue($this->getFullUpdateMessage());
+        } catch (Throwable $exception) {
+            $this->SendDebug('VisualizationUpdate', $exception->getMessage(), 0);
+        }
+    }
+
+    private function getFullUpdateMessage(): string
+    {
+        return json_encode(
+            ['type' => 'state', 'payload' => $this->buildState()],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildState(): array
+    {
+        $calendars = $this->getSelectedCalendars();
+        $events = [];
+        $pastDays = max(0, min(1095, $this->ReadPropertyInteger('PastDays')));
+        $futureDays = max(1, min(1095, $this->ReadPropertyInteger('FutureDays')));
+        $rangeStart = (new DateTimeImmutable('today'))->modify('-' . $pastDays . ' days')->getTimestamp();
+        $rangeEnd = (new DateTimeImmutable('today'))->modify('+' . ($futureDays + 1) . ' days')->getTimestamp();
+
+        foreach ($calendars as $calendar) {
+            try {
+                $calendarEvents = json_decode(IPSKAL_GetEvents($calendar['instanceId']), true, 512, JSON_THROW_ON_ERROR);
+            } catch (Throwable $exception) {
+                $this->SendDebug('CalendarData', $exception->getMessage(), 0);
+                continue;
+            }
+            if (!is_array($calendarEvents)) {
+                continue;
+            }
+
+            foreach ($calendarEvents as $event) {
+                if (!is_array($event)) {
+                    continue;
+                }
+                $startTimestamp = (int) ($event['startTimestamp'] ?? 0);
+                $endTimestamp = (int) ($event['endTimestamp'] ?? $startTimestamp);
+                if ($startTimestamp <= 0 || $endTimestamp < $rangeStart || $startTimestamp >= $rangeEnd) {
+                    continue;
+                }
+                $event['calendarInstanceId'] = $calendar['instanceId'];
+                $event['calendarName'] = $calendar['name'];
+                $event['calendarColor'] = $calendar['color'];
+                $event['canWrite'] = $calendar['canWrite'];
+                $events[] = $event;
+            }
+        }
+
+        usort(
+            $events,
+            static fn(array $left, array $right): int => ((int) $left['startTimestamp'] <=> (int) $right['startTimestamp'])
+                ?: strcasecmp((string) ($left['summary'] ?? ''), (string) ($right['summary'] ?? ''))
+        );
+        $events = array_slice($events, 0, max(1, min(1000, $this->ReadPropertyInteger('MaxEvents'))));
+
+        return [
+            'events'      => $events,
+            'calendars'   => array_values($calendars),
+            'generatedAt' => time(),
+            'settings'    => [
+                'defaultView'      => match ($this->ReadPropertyInteger('DefaultView')) {
+                    1       => 'week',
+                    2       => 'month',
+                    default => 'agenda'
+                },
+                'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),
+                'showCalendarName' => $this->ReadPropertyBoolean('ShowCalendarName'),
+                'showLocation'     => $this->ReadPropertyBoolean('ShowLocation'),
+                'showDescription'  => $this->ReadPropertyBoolean('ShowDescription')
+            ]
+        ];
+    }
+
+    /**
+     * @return list<array{instanceId: int, name: string, color: string, canWrite: bool}>
+     */
+    private function getSelectedCalendars(): array
+    {
+        $configuration = json_decode($this->ReadPropertyString('Calendars'), true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($configuration)) {
+            throw new UnexpectedValueException('The calendar selection is invalid.');
+        }
+
+        $result = [];
+        $usedIds = [];
+        foreach ($configuration as $row) {
+            if (!is_array($row) || !($row['Enabled'] ?? true)) {
+                continue;
+            }
+            $instanceId = (int) ($row['InstanceID'] ?? 0);
+            if ($instanceId <= 0 || isset($usedIds[$instanceId]) || !IPS_InstanceExists($instanceId)) {
+                continue;
+            }
+            $instance = IPS_GetInstance($instanceId);
+            if (($instance['ModuleInfo']['ModuleID'] ?? '') !== self::CALENDAR_MODULE_ID) {
+                continue;
+            }
+            $usedIds[$instanceId] = true;
+            $color = strtoupper(trim((string) IPS_GetProperty($instanceId, 'CalendarColor')));
+            if (preg_match('/^#[0-9A-F]{6}$/', $color) !== 1) {
+                $palette = ['#4F8EF7', '#4FB286', '#E09F3E', '#D65DB1', '#7B61FF', '#EF6F6C', '#2CA6A4'];
+                $color = $palette[abs(crc32((string) $instanceId)) % count($palette)];
+            }
+
+            $result[] = [
+                'instanceId' => $instanceId,
+                'name'       => IPS_GetName($instanceId),
+                'color'      => $color,
+                'canWrite'   => (bool) IPS_GetProperty($instanceId, 'CanWrite')
+            ];
+        }
+
+        return $result;
+    }
+
+    private function findChildByIdent(int $parentId, string $ident): int
+    {
+        foreach (IPS_GetChildrenIDs($parentId) as $childId) {
+            $object = IPS_GetObject($childId);
+            if (($object['ObjectIdent'] ?? '') === $ident) {
+                return $childId;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeActionValue(mixed $value): array
+    {
+        if (!is_string($value)) {
+            throw new InvalidArgumentException('The visualization request is invalid.');
+        }
+        $request = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($request) || array_is_list($request)) {
+            throw new InvalidArgumentException('The visualization request is invalid.');
+        }
+        return $request;
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     */
+    private function requireWritableCalendar(array $request): int
+    {
+        $instanceId = (int) ($request['calendarInstanceId'] ?? 0);
+        foreach ($this->getSelectedCalendars() as $calendar) {
+            if ($calendar['instanceId'] === $instanceId && $calendar['canWrite']) {
+                return $instanceId;
+            }
+        }
+        throw new RuntimeException('The selected calendar is not writable.');
+    }
+
+    private function sendToast(string $level, string $message): void
+    {
+        $this->UpdateVisualizationValue(json_encode(
+            ['type' => 'toast', 'level' => $level, 'message' => $message],
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        ));
+    }
+}

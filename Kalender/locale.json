@@ -11,6 +11,8 @@
             "Calendar ID": "Kalender-ID",
             "Provider calendar ID": "Kalender-ID des Anbieters",
             "Calendar URL": "Kalender-URL",
+            "Calendar color": "Kalenderfarbe",
+            "Writable": "Beschreibbar",
             "Synchronize now": "Jetzt synchronisieren",
             "Synchronization successful.": "Synchronisation erfolgreich.",
             "Synchronization failed.": "Synchronisation fehlgeschlagen.",

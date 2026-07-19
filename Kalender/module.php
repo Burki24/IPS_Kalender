@@ -19,6 +19,8 @@ class Kalender extends IPSModuleStrict
         $this->RegisterPropertyString('CalendarID', '');
         $this->RegisterPropertyString('ProviderCalendarID', '');
         $this->RegisterPropertyString('CalendarURL', '');
+        $this->RegisterPropertyString('CalendarColor', '');
+        $this->RegisterPropertyBoolean('CanWrite', false);
         $this->RegisterPropertyInteger('UpdateInterval', 15);
         $this->RegisterPropertyInteger('PastDays', 30);
         $this->RegisterPropertyInteger('FutureDays', 365);
@@ -162,6 +164,8 @@ class Kalender extends IPSModuleStrict
         return json_encode(
             [
                 'calendarId'          => $this->ReadPropertyString('CalendarID'),
+                'calendarColor'       => $this->ReadPropertyString('CalendarColor'),
+                'canWrite'            => $this->ReadPropertyBoolean('CanWrite'),
                 'eventCount'          => count($this->readEvents()),
                 'lastSynchronization' => $this->ReadAttributeInteger('LastSynchronization'),
                 'lastError'           => $this->ReadAttributeString('LastError')

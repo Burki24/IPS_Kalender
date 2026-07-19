@@ -50,6 +50,18 @@
                     "name": "CalendarURL",
                     "caption": "Calendar URL",
                     "enabled": false
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "CalendarColor",
+                    "caption": "Calendar color",
+                    "enabled": false
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "CanWrite",
+                    "caption": "Writable",
+                    "enabled": false
                 }
             ]
         }

@@ -1,5 +1,125 @@
 {
-    "elements": [],
-    "actions": [],
-    "status": []
+    "elements": [
+        {
+            "type": "List",
+            "name": "Calendars",
+            "caption": "Calendars",
+            "rowCount": 6,
+            "add": true,
+            "delete": true,
+            "changeOrder": true,
+            "columns": [
+                {
+                    "caption": "Calendar instance",
+                    "name": "InstanceID",
+                    "width": "auto",
+                    "add": 0,
+                    "edit": {
+                        "type": "SelectInstance",
+                        "validModules": [
+                            "{227B63E4-4223-316B-76E9-FD3849689562}"
+                        ]
+                    }
+                },
+                {
+                    "caption": "Enabled",
+                    "name": "Enabled",
+                    "width": "100px",
+                    "add": true,
+                    "edit": {
+                        "type": "CheckBox"
+                    }
+                }
+            ]
+        },
+        {
+            "type": "Select",
+            "name": "DefaultView",
+            "caption": "Default view",
+            "options": [
+                {
+                    "caption": "Agenda",
+                    "value": 0
+                },
+                {
+                    "caption": "Week",
+                    "value": 1
+                },
+                {
+                    "caption": "Month",
+                    "value": 2
+                }
+            ]
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "PastDays",
+                    "caption": "Past days",
+                    "minimum": 0,
+                    "maximum": 1095
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "FutureDays",
+                    "caption": "Future days",
+                    "minimum": 1,
+                    "maximum": 1095
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxEvents",
+                    "caption": "Maximum events",
+                    "minimum": 1,
+                    "maximum": 1000
+                }
+            ]
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "CheckBox",
+                    "name": "ShowWeekends",
+                    "caption": "Show weekends"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowCalendarName",
+                    "caption": "Show calendar name"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowLocation",
+                    "caption": "Show location"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowDescription",
+                    "caption": "Show description"
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Synchronize calendars",
+            "onClick": "echo IPSKALVIEW_SynchronizeCalendars($id) ? 'Synchronization successful.' : 'Synchronization failed.';"
+        }
+    ],
+    "status": [
+        {
+            "code": 201,
+            "icon": "inactive",
+            "caption": "No calendars selected"
+        },
+        {
+            "code": 202,
+            "icon": "error",
+            "caption": "Invalid configuration"
+        }
+    ]
 }
