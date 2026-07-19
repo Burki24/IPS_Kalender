@@ -7,12 +7,13 @@
         :root {
             color-scheme: light dark;
             --tile-title-clearance: 58px;
-            --cal-text: light-dark(#18202f, #f3f6fb);
+            --cal-text: var(--content-color, light-dark(#18202f, #f3f6fb));
+            --cal-card: var(--card-color, light-dark(#ffffff, #111111));
             --cal-muted: color-mix(in srgb, currentColor 58%, transparent);
             --cal-border: color-mix(in srgb, currentColor 14%, transparent);
             --cal-surface: color-mix(in srgb, currentColor 7%, transparent);
             --cal-surface-hover: color-mix(in srgb, currentColor 12%, transparent);
-            --cal-accent: #4f8ef7;
+            --cal-accent: var(--accent-color, #4f8ef7);
             --cal-danger: #d84a4a;
             --cal-radius: 12px;
         }
@@ -25,7 +26,7 @@
             margin: 0;
             overflow: hidden;
             overscroll-behavior: none;
-            background: transparent;
+            background: var(--cal-card);
             color: var(--cal-text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
@@ -135,7 +136,7 @@
             align-items: baseline;
             gap: 7px;
             padding: 7px 4px 5px;
-            background: color-mix(in srgb, Canvas 92%, transparent);
+            background: color-mix(in srgb, var(--cal-card) 92%, transparent);
             backdrop-filter: blur(8px);
         }
         .agenda-date strong { font-size: .88rem; }
@@ -186,7 +187,7 @@
         .calendar-grid.hide-weekends { grid-template-columns: repeat(5, minmax(0, 1fr)); min-width: 360px; }
         .weekday {
             padding: 7px 4px;
-            background: color-mix(in srgb, Canvas 96%, transparent);
+            background: color-mix(in srgb, var(--cal-card) 96%, transparent);
             color: var(--cal-muted);
             font-size: .68rem;
             font-weight: 650;
@@ -197,7 +198,7 @@
             min-height: 82px;
             padding: 5px;
             overflow: hidden;
-            background: color-mix(in srgb, Canvas 95%, transparent);
+            background: color-mix(in srgb, var(--cal-card) 95%, transparent);
         }
         .month-day.outside { opacity: .48; }
         .month-day.today { box-shadow: inset 0 0 0 2px var(--cal-accent); }
@@ -292,8 +293,8 @@
             overflow: hidden;
             border: 1px solid var(--cal-border);
             border-radius: 15px;
-            background: Canvas;
-            color: CanvasText;
+            background: var(--cal-card);
+            color: var(--cal-text);
             box-shadow: 0 18px 50px rgba(0,0,0,.35);
         }
         dialog::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
@@ -312,8 +313,8 @@
             color: inherit;
         }
         .form-row select option {
-            background-color: light-dark(#ffffff, #202124);
-            color: light-dark(#18202f, #f3f6fb);
+            background-color: var(--cal-card);
+            color: var(--cal-text);
         }
         .form-row textarea { min-height: 62px; resize: vertical; }
         .checkbox-row { display: flex; align-items: center; gap: 8px; }
@@ -449,6 +450,8 @@
     const periodTitle = document.getElementById('period-title');
     const eventDialog = document.getElementById('event-dialog');
     const eventForm = document.getElementById('event-form');
+
+    applySymconColorScheme();
 
     function handleMessage(data) {
         let message = data;
@@ -841,6 +844,22 @@
         toast.className = 'toast visible' + (level === 'error' ? ' error' : '');
         clearTimeout(toastTimer);
         toastTimer = setTimeout(() => { toast.className = 'toast'; }, 3200);
+    }
+
+    function applySymconColorScheme() {
+        const suppliedColor = getComputedStyle(document.body).getPropertyValue('--content-color').trim();
+        if (!suppliedColor) return;
+
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--content-color)';
+        probe.style.display = 'none';
+        document.body.appendChild(probe);
+        const components = getComputedStyle(probe).color.match(/[\d.]+/g);
+        probe.remove();
+        if (!components || components.length < 3) return;
+
+        const luminance = (299 * Number(components[0]) + 587 * Number(components[1]) + 114 * Number(components[2])) / 1000;
+        document.documentElement.style.colorScheme = luminance < 128 ? 'light' : 'dark';
     }
 
     function t(value) {
