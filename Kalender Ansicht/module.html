@@ -800,6 +800,30 @@
         activeView = button.dataset.view;
         render();
     }));
+    document.addEventListener('wheel', containWheelInsideTile, { capture: true, passive: false });
+
+    function containWheelInsideTile(event) {
+        if (event.ctrlKey) return;
+
+        const scrollTarget = eventDialog.open
+            ? document.querySelector('.dialog-body')
+            : content;
+        const factor = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+            ? 16
+            : (event.deltaMode === WheelEvent.DOM_DELTA_PAGE ? scrollTarget.clientHeight : 1);
+        const deltaX = event.deltaX * factor;
+        const deltaY = event.deltaY * factor;
+
+        if (event.shiftKey && deltaX === 0) {
+            scrollTarget.scrollLeft += deltaY;
+        } else {
+            scrollTarget.scrollLeft += deltaX;
+            scrollTarget.scrollTop += deltaY;
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    }
 
     function navigate(direction) {
         if (activeView === 'month') cursorDate = new Date(cursorDate.getFullYear(), cursorDate.getMonth() + direction, 1);
