@@ -1,0 +1,12 @@
+{
+    "id": "{4A013D9D-3611-9900-5815-A8EC8A91287D}",
+    "name": "Kalender Konfigurator",
+    "type": 4,
+    "vendor": "Burkhard Kneiseler",
+    "aliases": [],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "IPSKALCFG",
+    "url": ""
+}

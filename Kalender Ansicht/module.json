@@ -1,0 +1,12 @@
+{
+    "id": "{1B19AB6B-9052-EA85-F158-86A13FE6F5BA}",
+    "name": "Kalender Ansicht",
+    "type": 3,
+    "vendor": "Burkhard Kneiseler",
+    "aliases": [],
+    "parentRequirements": [],
+    "childRequirements": [],
+    "implemented": [],
+    "prefix": "IPSKALVIEW",
+    "url": ""
+}
