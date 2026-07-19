@@ -24,6 +24,7 @@
             height: 100%;
             margin: 0;
             overflow: hidden;
+            overscroll-behavior: none;
             background: transparent;
             color: var(--cal-text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -38,6 +39,7 @@
             flex-direction: column;
             height: 100%;
             min-height: 170px;
+            overscroll-behavior: none;
             isolation: isolate;
         }
 
@@ -108,6 +110,7 @@
             min-height: 0;
             padding-top: 8px;
             overflow: auto;
+            overscroll-behavior: contain;
             scrollbar-width: thin;
         }
 
@@ -296,7 +299,7 @@
         dialog::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
         .dialog-header { display: flex; align-items: center; gap: 8px; padding: 13px 15px; border-bottom: 1px solid var(--cal-border); }
         .dialog-header h2 { flex: 1; margin: 0; font-size: 1rem; }
-        .dialog-body { display: grid; gap: 10px; max-height: calc(100vh - var(--tile-title-clearance) - 165px); padding: 14px 15px; overflow: auto; }
+        .dialog-body { display: grid; gap: 10px; max-height: calc(100vh - var(--tile-title-clearance) - 165px); padding: 14px 15px; overflow: auto; overscroll-behavior: contain; }
         .form-row { display: grid; gap: 5px; }
         .form-row.two { grid-template-columns: 1fr 1fr; gap: 10px; }
         .form-row label { color: var(--cal-muted); font-size: .7rem; font-weight: 600; }
