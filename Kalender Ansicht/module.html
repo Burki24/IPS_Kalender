@@ -283,7 +283,8 @@
 
         dialog {
             width: min(440px, calc(100% - 24px));
-            max-height: calc(100% - 24px);
+            max-height: calc(100% - var(--tile-title-clearance) - 24px);
+            margin: calc(var(--tile-title-clearance) + 12px) auto 12px;
             padding: 0;
             overflow: hidden;
             border: 1px solid var(--cal-border);
@@ -295,7 +296,7 @@
         dialog::backdrop { background: rgba(0,0,0,.45); backdrop-filter: blur(2px); }
         .dialog-header { display: flex; align-items: center; gap: 8px; padding: 13px 15px; border-bottom: 1px solid var(--cal-border); }
         .dialog-header h2 { flex: 1; margin: 0; font-size: 1rem; }
-        .dialog-body { display: grid; gap: 10px; max-height: calc(100vh - 145px); padding: 14px 15px; overflow: auto; }
+        .dialog-body { display: grid; gap: 10px; max-height: calc(100vh - var(--tile-title-clearance) - 165px); padding: 14px 15px; overflow: auto; }
         .form-row { display: grid; gap: 5px; }
         .form-row.two { grid-template-columns: 1fr 1fr; gap: 10px; }
         .form-row label { color: var(--cal-muted); font-size: .7rem; font-weight: 600; }
