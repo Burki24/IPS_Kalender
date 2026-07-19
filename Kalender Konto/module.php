@@ -6,15 +6,22 @@ use IPSKalender\CalendarHttpClient;
 use IPSKalender\CalendarProviderInterface;
 use IPSKalender\CalDAVProvider;
 use IPSKalender\CalDAVProviderException;
+use IPSKalender\GoogleCalendarProvider;
+use IPSKalender\GoogleCalendarProviderException;
+use IPSKalender\OAuthBridgeClient;
+use IPSKalender\OAuthBridgeException;
 
 require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
+require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 
 class KalenderKonto extends IPSModuleStrict
 {
     private const DATA_ID_TO_CHILD = '{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}';
     private const APPLE_CALDAV_URL = 'https://caldav.icloud.com';
+    private const GOOGLE_OAUTH_IDENTIFIER = 'ipskalender_google';
 
     private const PROVIDER_APPLE = 0;
     private const PROVIDER_CALDAV = 1;
@@ -44,8 +51,11 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterAttributeString('CachedCalendars', '[]');
         $this->RegisterAttributeInteger('LastSynchronization', 0);
         $this->RegisterAttributeString('LastError', '');
+        $this->RegisterAttributeString('GoogleRefreshToken', '');
+        $this->RegisterAttributeString('GoogleAccount', '');
 
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_Synchronize($_IPS[\'TARGET\']);');
+        $this->RegisterOAuth(self::GOOGLE_OAUTH_IDENTIFIER);
     }
 
     public function GetConfigurationForm(): string
@@ -57,17 +67,29 @@ class KalenderKonto extends IPSModuleStrict
             JSON_THROW_ON_ERROR
         );
         $provider = $this->ReadPropertyInteger('Provider');
+        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV], true);
+        $isGoogle = $provider === self::PROVIDER_GOOGLE;
 
         foreach ($form['elements'] as &$element) {
-            if (($element['name'] ?? '') !== 'ServerURL') {
-                continue;
+            $name = (string) ($element['name'] ?? '');
+            if ($name === 'ServerURL') {
+                $element['visible'] = $isPasswordProvider;
+                $element['enabled'] = $provider === self::PROVIDER_CALDAV;
+                if ($provider === self::PROVIDER_APPLE) {
+                    $element['value'] = self::APPLE_CALDAV_URL;
+                }
+            } elseif (in_array($name, ['Username', 'Password'], true)) {
+                $element['visible'] = $isPasswordProvider;
+            } elseif (in_array($name, ['GoogleStatus', 'GoogleConnect', 'GoogleDisconnect'], true)) {
+                $element['visible'] = $isGoogle;
+                if ($name === 'GoogleStatus') {
+                    $element['caption'] = $this->googleStatusText();
+                } elseif ($name === 'GoogleConnect') {
+                    $element['visible'] = $isGoogle && !$this->isGoogleConnected();
+                } elseif ($name === 'GoogleDisconnect') {
+                    $element['visible'] = $isGoogle && $this->isGoogleConnected();
+                }
             }
-
-            $element['enabled'] = $provider === self::PROVIDER_CALDAV;
-            if ($provider === self::PROVIDER_APPLE) {
-                $element['value'] = self::APPLE_CALDAV_URL;
-            }
-            break;
         }
         unset($element);
 
@@ -79,6 +101,15 @@ class KalenderKonto extends IPSModuleStrict
 
     public function UpdateProviderForm(int $provider): void
     {
+        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV], true);
+        $isGoogle = $provider === self::PROVIDER_GOOGLE;
+        $this->UpdateFormField('ServerURL', 'visible', $isPasswordProvider);
+        $this->UpdateFormField('Username', 'visible', $isPasswordProvider);
+        $this->UpdateFormField('Password', 'visible', $isPasswordProvider);
+        $this->UpdateFormField('GoogleStatus', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleConnect', 'visible', $isGoogle && !$this->isGoogleConnected());
+        $this->UpdateFormField('GoogleDisconnect', 'visible', $isGoogle && $this->isGoogleConnected());
+
         if ($provider === self::PROVIDER_APPLE) {
             $this->UpdateFormField('ServerURL', 'value', self::APPLE_CALDAV_URL);
             $this->UpdateFormField('ServerURL', 'enabled', false);
@@ -98,12 +129,49 @@ class KalenderKonto extends IPSModuleStrict
         $this->UpdateFormField('ServerURL', 'enabled', false);
     }
 
+    public function ConnectGoogle(): string
+    {
+        // Re-register immediately before authentication so the callback reaches
+        // the account instance whose button was pressed, even with multiple accounts.
+        $this->RegisterOAuth(self::GOOGLE_OAUTH_IDENTIFIER);
+        return $this->createOAuthBridgeClient()->getAuthorizationUrl((string) IPS_GetLicensee());
+    }
+
+    public function DisconnectGoogle(): bool
+    {
+        $refreshToken = $this->ReadAttributeString('GoogleRefreshToken');
+        if ($refreshToken !== '') {
+            try {
+                $client = $this->createUnauthenticatedHttpClient();
+                $client->request(
+                    'POST',
+                    'https://oauth2.googleapis.com/revoke',
+                    ['Content-Type' => 'application/x-www-form-urlencoded'],
+                    http_build_query(['token' => $refreshToken], '', '&', PHP_QUERY_RFC3986)
+                );
+            } catch (Throwable $exception) {
+                $this->SendDebug('GoogleOAuthRevoke', $this->sanitizeError($exception->getMessage()), 0);
+            }
+        }
+
+        $this->WriteAttributeString('GoogleRefreshToken', '');
+        $this->WriteAttributeString('GoogleAccount', '');
+        $this->SetBuffer('GoogleAccessToken', '');
+        $this->ClearCache();
+        $this->SetStatus($this->ReadPropertyBoolean('Active') ? self::STATUS_CONFIGURATION_MISSING : IS_INACTIVE);
+        $this->ReloadForm();
+
+        return true;
+    }
+
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
 
         $providerName = $this->getProviderName($this->ReadPropertyInteger('Provider'));
-        $username = trim($this->ReadPropertyString('Username'));
+        $username = $this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE
+            ? trim($this->ReadAttributeString('GoogleAccount'))
+            : trim($this->ReadPropertyString('Username'));
         $this->SetSummary($username !== '' ? $providerName . ' – ' . $username : $providerName);
 
         if (!$this->ReadPropertyBoolean('Active')) {
@@ -261,6 +329,11 @@ class KalenderKonto extends IPSModuleStrict
         return json_encode(
             [
                 'provider'            => $this->getProviderName($this->ReadPropertyInteger('Provider')),
+                'connected'           => $this->ReadPropertyInteger('Provider') !== self::PROVIDER_GOOGLE
+                    || $this->isGoogleConnected(),
+                'account'             => $this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE
+                    ? $this->ReadAttributeString('GoogleAccount')
+                    : trim($this->ReadPropertyString('Username')),
                 'lastSynchronization' => $this->ReadAttributeInteger('LastSynchronization'),
                 'lastError'           => $this->ReadAttributeString('LastError')
             ],
@@ -290,6 +363,18 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         $calendars = $this->createProvider()->getCalendars();
+        if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE) {
+            foreach ($calendars as $calendar) {
+                if ((bool) ($calendar['primary'] ?? false)) {
+                    $account = trim((string) ($calendar['providerId'] ?? ''));
+                    $this->WriteAttributeString('GoogleAccount', $account);
+                    if ($account !== '') {
+                        $this->SetSummary($this->getProviderName(self::PROVIDER_GOOGLE) . ' – ' . $account);
+                    }
+                    break;
+                }
+            }
+        }
         $this->WriteAttributeString(
             'CachedCalendars',
             json_encode(
@@ -320,7 +405,7 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         return $this->createProvider()->getEvents(
-            (string) $calendar['url'],
+            $this->calendarReference($calendar),
             new DateTimeImmutable('@' . $startTimestamp),
             new DateTimeImmutable('@' . $endTimestamp)
         );
@@ -338,7 +423,7 @@ class KalenderKonto extends IPSModuleStrict
             throw new InvalidArgumentException('The event data is invalid.');
         }
 
-        return $this->createProvider()->createEvent((string) $calendar['url'], $event);
+        return $this->createProvider()->createEvent($this->calendarReference($calendar), $event);
     }
 
     /**
@@ -354,7 +439,7 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         return $this->createProvider()->updateEvent(
-            (string) $calendar['url'],
+            $this->calendarReference($calendar),
             trim((string) ($request['ResourceURL'] ?? '')),
             trim((string) ($request['ETag'] ?? '')),
             trim((string) ($request['UID'] ?? '')),
@@ -370,7 +455,7 @@ class KalenderKonto extends IPSModuleStrict
         $calendar = $this->resolveCalendar((string) ($request['CalendarID'] ?? ''));
 
         return $this->createProvider()->deleteEvent(
-            (string) $calendar['url'],
+            $this->calendarReference($calendar),
             trim((string) ($request['ResourceURL'] ?? '')),
             trim((string) ($request['ETag'] ?? '')),
             trim((string) ($request['RecurrenceID'] ?? ''))
@@ -392,14 +477,14 @@ class KalenderKonto extends IPSModuleStrict
         }
         foreach ($calendars as $calendar) {
             if (is_array($calendar) && (string) ($calendar['id'] ?? '') === $calendarId
-                && trim((string) ($calendar['url'] ?? '')) !== '') {
+                && $this->calendarReference($calendar) !== '') {
                 return $calendar;
             }
         }
 
         foreach ($this->discoverCalendars() as $calendar) {
             if ((string) ($calendar['id'] ?? '') === $calendarId
-                && trim((string) ($calendar['url'] ?? '')) !== '') {
+                && $this->calendarReference($calendar) !== '') {
                 return $calendar;
             }
         }
@@ -414,18 +499,26 @@ class KalenderKonto extends IPSModuleStrict
             throw new RuntimeException('The selected provider is not implemented yet.');
         }
 
+        if ($provider === self::PROVIDER_GOOGLE) {
+            return new GoogleCalendarProvider(
+                $this->createUnauthenticatedHttpClient(),
+                $this->getGoogleAccessToken()
+            );
+        }
+
         $serverUrl = $provider === self::PROVIDER_APPLE
             ? self::APPLE_CALDAV_URL
             : trim($this->ReadPropertyString('ServerURL'));
 
-        $httpClient = new CalendarHttpClient(
-            max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
-            $this->ReadPropertyBoolean('VerifyTLS'),
-            trim($this->ReadPropertyString('Username')),
-            $this->ReadPropertyString('Password')
+        return new CalDAVProvider(
+            new CalendarHttpClient(
+                max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
+                $this->ReadPropertyBoolean('VerifyTLS'),
+                trim($this->ReadPropertyString('Username')),
+                $this->ReadPropertyString('Password')
+            ),
+            $serverUrl
         );
-
-        return new CalDAVProvider($httpClient, $serverUrl);
     }
 
     private function validateConfiguration(): string
@@ -454,12 +547,16 @@ class KalenderKonto extends IPSModuleStrict
             return 'The CalDAV server URL is missing.';
         }
 
+        if ($provider === self::PROVIDER_GOOGLE && !$this->isGoogleConnected()) {
+            return 'Google Calendar is not connected yet.';
+        }
+
         return '';
     }
 
     private function isProviderImplemented(int $provider): bool
     {
-        return in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV], true);
+        return in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_GOOGLE], true);
     }
 
     private function getProviderName(int $provider): string
@@ -488,6 +585,12 @@ class KalenderKonto extends IPSModuleStrict
             } else {
                 $this->SetStatus(self::STATUS_CONNECTION_FAILED);
             }
+        } elseif ($exception instanceof GoogleCalendarProviderException) {
+            $this->SetStatus($exception->httpStatus === 401
+                ? self::STATUS_AUTHENTICATION_FAILED
+                : self::STATUS_CONNECTION_FAILED);
+        } elseif ($exception instanceof OAuthBridgeException) {
+            $this->SetStatus(self::STATUS_AUTHENTICATION_FAILED);
         } elseif ($exception instanceof JsonException) {
             $this->SetStatus(self::STATUS_INVALID_RESPONSE);
         } else {
@@ -495,6 +598,96 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         return $message;
+    }
+
+    protected function ProcessOAuthData(): void
+    {
+        try {
+            if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
+                throw new OAuthBridgeException('Unsupported OAuth callback method.');
+            }
+            $oauthError = trim((string) ($_GET['error_description'] ?? $_GET['error'] ?? ''));
+            if ($oauthError !== '') {
+                throw new OAuthBridgeException($oauthError);
+            }
+
+            $tokens = $this->createOAuthBridgeClient()->exchangeAuthorizationCode((string) ($_GET['code'] ?? ''));
+            $this->storeGoogleTokens($tokens);
+            $this->WriteAttributeString('LastError', '');
+            $this->SetStatus($this->ReadPropertyBoolean('Active') ? IS_ACTIVE : IS_INACTIVE);
+            $this->ReloadForm();
+            echo 'Google Calendar was connected successfully. You can close this window.';
+        } catch (Throwable $exception) {
+            $message = $this->handleProviderError($exception);
+            echo 'Google Calendar could not be connected: ' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        }
+    }
+
+    private function getGoogleAccessToken(): string
+    {
+        $cached = json_decode($this->GetBuffer('GoogleAccessToken'), true);
+        if (is_array($cached)
+            && trim((string) ($cached['token'] ?? '')) !== ''
+            && (int) ($cached['expiresAt'] ?? 0) > time() + 60) {
+            return (string) $cached['token'];
+        }
+
+        $tokens = $this->createOAuthBridgeClient()->refreshAccessToken(
+            $this->ReadAttributeString('GoogleRefreshToken')
+        );
+        $this->storeGoogleTokens($tokens);
+        return $tokens['accessToken'];
+    }
+
+    /**
+     * @param array{accessToken: string, refreshToken: string, expiresAt: int} $tokens
+     */
+    private function storeGoogleTokens(array $tokens): void
+    {
+        if ($tokens['refreshToken'] !== '') {
+            $this->WriteAttributeString('GoogleRefreshToken', $tokens['refreshToken']);
+        }
+        $this->SetBuffer('GoogleAccessToken', json_encode(
+            ['token' => $tokens['accessToken'], 'expiresAt' => $tokens['expiresAt']],
+            JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+        ));
+    }
+
+    private function createOAuthBridgeClient(): OAuthBridgeClient
+    {
+        return new OAuthBridgeClient($this->createUnauthenticatedHttpClient(), self::GOOGLE_OAUTH_IDENTIFIER);
+    }
+
+    private function createUnauthenticatedHttpClient(): CalendarHttpClient
+    {
+        return new CalendarHttpClient(
+            max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
+            $this->ReadPropertyBoolean('VerifyTLS')
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $calendar
+     */
+    private function calendarReference(array $calendar): string
+    {
+        return trim((string) ($calendar['reference'] ?? $calendar['url'] ?? ''));
+    }
+
+    private function isGoogleConnected(): bool
+    {
+        return trim($this->ReadAttributeString('GoogleRefreshToken')) !== '';
+    }
+
+    private function googleStatusText(): string
+    {
+        if (!$this->isGoogleConnected()) {
+            return $this->Translate('Google account is not connected.');
+        }
+        $account = trim($this->ReadAttributeString('GoogleAccount'));
+        return $account !== ''
+            ? sprintf($this->Translate('Connected with %s.'), $account)
+            : $this->Translate('Google account is connected.');
     }
 
     private function sanitizeError(string $message): string

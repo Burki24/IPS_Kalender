@@ -328,6 +328,7 @@ final class CalDAVProvider implements CalendarProviderInterface
             $calendars[] = [
                 'id'           => hash('sha256', $url),
                 'providerId'   => $url,
+                'reference'    => $url,
                 'url'          => $url,
                 'name'         => $name !== '' ? $name : basename(rtrim(rawurldecode($href), '/')),
                 'description'  => $this->firstNodeValue($xpath, './/c:calendar-description', $calendarResponse),

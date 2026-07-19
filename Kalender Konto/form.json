@@ -20,7 +20,7 @@
                     "value": 1
                 },
                 {
-                    "caption": "Google Calendar (planned)",
+                    "caption": "Google Calendar",
                     "value": 2
                 },
                 {
@@ -49,6 +49,27 @@
             "type": "PasswordTextBox",
             "name": "Password",
             "caption": "Password"
+        },
+        {
+            "type": "Label",
+            "name": "GoogleStatus",
+            "caption": "Google account is not connected.",
+            "visible": false
+        },
+        {
+            "type": "Button",
+            "name": "GoogleConnect",
+            "caption": "Connect Google account",
+            "visible": false,
+            "onClick": "echo IPSKALACC_ConnectGoogle($id);"
+        },
+        {
+            "type": "Button",
+            "name": "GoogleDisconnect",
+            "caption": "Disconnect Google account",
+            "visible": false,
+            "confirm": "Do you really want to disconnect the Google account?",
+            "onClick": "echo IPSKALACC_DisconnectGoogle($id) ? 'Google account disconnected.' : 'Could not disconnect Google account.';"
         },
         {
             "type": "NumberSpinner",
