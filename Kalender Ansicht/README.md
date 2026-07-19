@@ -4,7 +4,7 @@ Die Kalender Ansicht fasst Termine mehrerer Kalenderinstanzen in einer responsiv
 
 ## Funktionsumfang
 
-- Agenda-, Wochen- und Monatsansicht
+- Agenda-, 3-Tage-, Wochen- und Monatsansicht
 - Zusammenführen beliebig vieler ausgewählter Kalender
 - Farbliche Zuordnung der Termine zu ihren Kalendern
 - Optionale Anzeige von Kalendername, Ort und Beschreibung

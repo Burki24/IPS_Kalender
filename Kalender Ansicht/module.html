@@ -232,6 +232,7 @@
             gap: 7px;
         }
         .week-grid.hide-weekends { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .week-grid.three-day-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .week-column { min-width: 0; min-height: 180px; padding: 7px; border: 1px solid var(--cal-border); border-radius: var(--cal-radius); background: var(--cal-surface); }
         .week-column.today { border-color: var(--cal-accent); }
         .week-heading { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--cal-border); font-size: .74rem; font-weight: 650; text-align: center; }
@@ -345,7 +346,7 @@
             #view-buttons {
                 display: grid;
                 grid-area: views;
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(4, 1fr);
             }
             #refresh-button { grid-area: refresh; }
             .view-button { padding-inline: 6px; font-size: .7rem; }
@@ -356,7 +357,8 @@
 
         @media (max-width: 800px) {
             .week-grid,
-            .week-grid.hide-weekends {
+            .week-grid.hide-weekends,
+            .week-grid.three-day-grid {
                 grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
             }
             .week-column { min-height: 145px; }
@@ -383,6 +385,7 @@
         <div class="toolbar-spacer"></div>
         <div class="toolbar-group" id="view-buttons">
             <button class="view-button" data-view="agenda">Agenda</button>
+            <button class="view-button" data-view="threeDays">3 Days</button>
             <button class="view-button" data-view="week">Week</button>
             <button class="view-button" data-view="month">Month</button>
         </div>
@@ -484,6 +487,8 @@
             renderMonth();
         } else if (activeView === 'week') {
             renderWeek();
+        } else if (activeView === 'threeDays') {
+            renderThreeDays();
         } else {
             renderAgenda();
         }
@@ -492,9 +497,10 @@
     }
 
     function updateToolbar() {
+        const viewLabels = { agenda: 'Agenda', threeDays: '3 Days', week: 'Week', month: 'Month' };
         document.querySelectorAll('.view-button').forEach(button => {
             button.classList.toggle('active', button.dataset.view === activeView);
-            button.textContent = t(capitalize(button.dataset.view));
+            button.textContent = t(viewLabels[button.dataset.view] || button.dataset.view);
         });
         document.getElementById('previous-button').title = t('Previous');
         document.getElementById('today-button').title = t('Today');
@@ -507,6 +513,9 @@
             const start = startOfWeek(cursorDate);
             const end = addDays(start, 6);
             periodTitle.textContent = formatRange(start, end);
+        } else if (activeView === 'threeDays') {
+            const days = getThreeVisibleDays(cursorDate);
+            periodTitle.textContent = formatRange(days[0], days[days.length - 1]);
         } else {
             const end = addDays(cursorDate, 13);
             periodTitle.textContent = formatRange(cursorDate, end);
@@ -576,7 +585,15 @@
         const weekStart = startOfWeek(cursorDate);
         const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
             .filter(day => calendarState.settings.showWeekends !== false || !isWeekend(day));
-        const grid = element('div', 'week-grid' + (calendarState.settings.showWeekends === false ? ' hide-weekends' : ''));
+        renderDayColumns(days, 'week-grid' + (calendarState.settings.showWeekends === false ? ' hide-weekends' : ''));
+    }
+
+    function renderThreeDays() {
+        renderDayColumns(getThreeVisibleDays(cursorDate), 'week-grid three-day-grid');
+    }
+
+    function renderDayColumns(days, className) {
+        const grid = element('div', className);
         days.forEach(day => {
             const column = element('section', 'week-column' + (isToday(day) ? ' today' : ''));
             const heading = element('div', 'week-heading');
@@ -600,6 +617,18 @@
             grid.appendChild(column);
         });
         content.appendChild(grid);
+    }
+
+    function getThreeVisibleDays(start) {
+        const days = [];
+        let day = startOfDay(start);
+        while (days.length < 3) {
+            if (calendarState.settings.showWeekends !== false || !isWeekend(day)) {
+                days.push(day);
+            }
+            day = addDays(day, 1);
+        }
+        return days;
     }
 
     function renderMonth() {
@@ -830,8 +859,22 @@
 
     function navigate(direction) {
         if (activeView === 'month') cursorDate = new Date(cursorDate.getFullYear(), cursorDate.getMonth() + direction, 1);
+        else if (activeView === 'threeDays') cursorDate = moveVisibleDays(getThreeVisibleDays(cursorDate)[0], direction * 3);
         else cursorDate = addDays(cursorDate, direction * (activeView === 'week' ? 7 : 14));
         render();
+    }
+
+    function moveVisibleDays(start, amount) {
+        let result = startOfDay(start);
+        const direction = amount < 0 ? -1 : 1;
+        let remaining = Math.abs(amount);
+        while (remaining > 0) {
+            result = addDays(result, direction);
+            if (calendarState.settings.showWeekends !== false || !isWeekend(result)) {
+                remaining--;
+            }
+        }
+        return result;
     }
 
     function sendAction(ident, value) {
@@ -867,7 +910,6 @@
         catch (error) { return value; }
     }
     function element(tag, className) { const node = document.createElement(tag); node.className = className; return node; }
-    function capitalize(value) { return value.charAt(0).toUpperCase() + value.slice(1); }
     function startOfDay(date) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
     function startOfWeek(date) { const result = startOfDay(date); const day = result.getDay() || 7; result.setDate(result.getDate() - day + 1); return result; }
     function addDays(date, days) { const result = new Date(date); result.setDate(result.getDate() + days); return result; }

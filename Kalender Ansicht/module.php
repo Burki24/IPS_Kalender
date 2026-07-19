@@ -250,6 +250,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 'defaultView'      => match ($this->ReadPropertyInteger('DefaultView')) {
                     1       => 'week',
                     2       => 'month',
+                    3       => 'threeDays',
                     default => 'agenda'
                 },
                 'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),

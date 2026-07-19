@@ -42,6 +42,10 @@
                     "value": 0
                 },
                 {
+                    "caption": "3 Days",
+                    "value": 3
+                },
+                {
                     "caption": "Week",
                     "value": 1
                 },
