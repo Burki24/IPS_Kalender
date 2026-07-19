@@ -222,17 +222,26 @@
 
         .week-grid {
             display: grid;
-            grid-template-columns: repeat(7, minmax(120px, 1fr));
+            width: 100%;
+            min-width: 0;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
             gap: 7px;
-            min-width: 700px;
         }
-        .week-grid.hide-weekends { grid-template-columns: repeat(5, minmax(120px, 1fr)); min-width: 560px; }
-        .week-column { min-height: 180px; padding: 7px; border: 1px solid var(--cal-border); border-radius: var(--cal-radius); background: var(--cal-surface); }
+        .week-grid.hide-weekends { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        .week-column { min-width: 0; min-height: 180px; padding: 7px; border: 1px solid var(--cal-border); border-radius: var(--cal-radius); background: var(--cal-surface); }
         .week-column.today { border-color: var(--cal-accent); }
         .week-heading { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--cal-border); font-size: .74rem; font-weight: 650; text-align: center; }
-        .week-event { margin: 4px 0; padding: 6px; border-left: 3px solid var(--event-color); border-radius: 6px; background: color-mix(in srgb, var(--event-color) 15%, transparent); cursor: pointer; font-size: .68rem; }
-        .week-event strong { display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .week-event span { color: var(--cal-muted); }
+        .week-event { margin: 4px 0; padding: 6px; overflow: hidden; border-left: 3px solid var(--event-color); border-radius: 6px; background: color-mix(in srgb, var(--event-color) 15%, transparent); cursor: pointer; font-size: .68rem; }
+        .week-event strong {
+            display: -webkit-box;
+            margin-bottom: 2px;
+            overflow: hidden;
+            overflow-wrap: anywhere;
+            line-height: 1.25;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+        .week-event span { display: block; overflow-wrap: anywhere; color: var(--cal-muted); line-height: 1.25; }
 
         .floating-add {
             position: absolute;
@@ -334,6 +343,14 @@
             .toolbar-title { font-size: .82rem; }
             .event-card { grid-template-columns: 4px 54px 1fr; gap: 7px; }
             .form-row.two { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 800px) {
+            .week-grid,
+            .week-grid.hide-weekends {
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            }
+            .week-column { min-height: 145px; }
         }
 
         @media (max-height: 260px) {
