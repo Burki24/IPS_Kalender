@@ -45,6 +45,8 @@ Agenda, 3-Tage-, Wochen- und Monatsansicht sowie die Navigation funktionieren di
 
 Die HTMLBox kann den Hintergrund der umgebenden IPSView nicht auslesen, da sie in einem eigenen Browserbereich ausgeführt wird. Deshalb ist der Kontrast unabhängig von der Transparenz einstellbar. Bei älteren IPSView-Clients oder nativen Renderern kann der Browserbereich trotz transparentem HTML einen eigenen Hintergrund zeichnen; in diesem Fall den aktuellen Browser-Renderer des Clients verwenden.
 
+Die IPSView-Option **Seite skalieren** wird laut Hersteller nur von den mobilen Clients unterstützt und hat unter Windows keine Wirkung. Schriftgröße und Farbbalkenbreite werden deshalb vom Modul direkt am Kalenderinhalt gesetzt. Für die zuverlässige Verarbeitung von CSS und JavaScript muss in IPSView **Browser des Clients** statt **HTML Renderer** ausgewählt sein.
+
 Über `Kalender synchronisieren` kann die Verbindung bereits in der Konfiguration geprüft werden. Neu vom Konfigurator angelegte Kalender übernehmen Farbe und Schreibberechtigung automatisch. Bei Kalenderinstanzen, die vor Einführung dieser Eigenschaften angelegt wurden, die Konfiguration über den Kalender-Konfigurator einmal neu anwenden.
 
 ## PHP-Befehlsreferenz

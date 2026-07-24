@@ -253,19 +253,21 @@ class KalenderAnsicht extends IPSModuleStrict
                 '<html lang="de" class="' . implode(' ', $classes) . '">',
                 $html
             );
-            $ipsViewStyle = sprintf(
-                '<style id="ipsview-settings">'
-                . 'html.ipsview-mode {'
-                . 'font-size:%d%% !important;'
-                . '--agenda-color-bar-width:%dpx !important;'
-                . '--compact-color-bar-width:%dpx !important;'
-                . '}'
-                . '</style>',
-                $fontScale,
-                $colorBarWidth,
-                $colorBarWidth
+            $html = str_replace(
+                '<meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                '<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">',
+                $html
             );
-            $html = str_replace('</head>', $ipsViewStyle . '</head>', $html);
+            $html = str_replace(
+                '<div id="calendar-app">',
+                sprintf(
+                    '<div id="calendar-app" style="font-size:%d%% !important; --agenda-color-bar-width:%dpx; --compact-color-bar-width:%dpx;">',
+                    $fontScale,
+                    $colorBarWidth,
+                    $colorBarWidth
+                ),
+                $html
+            );
             foreach ([
                 'Agenda', '3 Days', 'Week', 'Month', 'Previous', 'Today', 'Next', 'Refresh',
                 'No calendars selected', 'Select at least one calendar in the instance configuration.',
