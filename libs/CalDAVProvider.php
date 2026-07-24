@@ -14,6 +14,7 @@ use RuntimeException;
 
 require_once __DIR__ . '/CalendarProviderInterface.php';
 require_once __DIR__ . '/CalendarHttpClient.php';
+require_once __DIR__ . '/CalDAVOriginPolicy.php';
 require_once __DIR__ . '/ICalendarCodec.php';
 
 final class CalDAVProviderException extends RuntimeException
@@ -30,10 +31,14 @@ final class CalDAVProvider implements CalendarProviderInterface
     private const CALDAV_NAMESPACE = 'urn:ietf:params:xml:ns:caldav';
     private const APPLE_NAMESPACE = 'http://apple.com/ns/ical/';
 
+    private readonly CalDAVOriginPolicy $originPolicy;
+
     public function __construct(
         private readonly CalendarHttpClientInterface $httpClient,
-        private readonly string $serverUrl
+        string $serverUrl,
+        ?CalDAVOriginPolicy $originPolicy = null
     ) {
+        $this->originPolicy = $originPolicy ?? new CalDAVOriginPolicy($serverUrl);
     }
 
     public function testConnection(): array
@@ -49,7 +54,7 @@ final class CalDAVProvider implements CalendarProviderInterface
 
     public function getCalendars(): array
     {
-        $entryUrls = $this->getEntryUrls($this->serverUrl);
+        $entryUrls = $this->getEntryUrls();
         $lastException = null;
 
         foreach ($entryUrls as $entryUrl) {
@@ -95,6 +100,7 @@ final class CalDAVProvider implements CalendarProviderInterface
             $body
         );
         $this->assertResponseStatus($response, [207], 'calendar query');
+        $effectiveCalendarUrl = $this->trustedEffectiveUrl($response, $calendarUrl);
 
         $document = $this->parseXml($response->body);
         $xpath = new DOMXPath($document);
@@ -115,7 +121,7 @@ final class CalDAVProvider implements CalendarProviderInterface
             if ($href === '' || $calendarData === '') {
                 continue;
             }
-            $resourceUrl = $this->resolveUrl($response->effectiveUrl, $href);
+            $resourceUrl = $this->resolveUrl($effectiveCalendarUrl, $href);
             $this->assertResourceBelongsToCalendar($calendarUrl, $resourceUrl);
             $etag = $this->firstNodeValue($xpath, './/d:getetag', $eventResponse);
             array_push($events, ...ICalendarCodec::parseEvents($calendarData, $resourceUrl, $etag));
@@ -145,10 +151,12 @@ final class CalDAVProvider implements CalendarProviderInterface
             $created['ical']
         );
         $this->assertResponseStatus($response, [200, 201, 204], 'event creation');
+        $effectiveResourceUrl = $this->trustedEffectiveUrl($response, $resourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $effectiveResourceUrl);
 
         return [
             'uid'         => $created['uid'],
-            'resourceUrl' => $response->effectiveUrl !== '' ? $response->effectiveUrl : $resourceUrl,
+            'resourceUrl' => $effectiveResourceUrl,
             'etag'        => (string) ($response->headers['etag'] ?? '')
         ];
     }
@@ -169,6 +177,8 @@ final class CalDAVProvider implements CalendarProviderInterface
 
         $getResponse = $this->httpClient->request('GET', $resourceUrl, ['Accept' => 'text/calendar']);
         $this->assertResponseStatus($getResponse, [200], 'event retrieval');
+        $effectiveResourceUrl = $this->trustedEffectiveUrl($getResponse, $resourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $effectiveResourceUrl);
         $updatedIcal = ICalendarCodec::updateEvent($getResponse->body, $uid, $event);
         $currentEtag = $etag !== '' ? $etag : (string) ($getResponse->headers['etag'] ?? '');
         $headers = ['Content-Type' => 'text/calendar; charset=utf-8'];
@@ -176,12 +186,14 @@ final class CalDAVProvider implements CalendarProviderInterface
             $headers['If-Match'] = $currentEtag;
         }
 
-        $putResponse = $this->httpClient->request('PUT', $resourceUrl, $headers, $updatedIcal);
+        $putResponse = $this->httpClient->request('PUT', $effectiveResourceUrl, $headers, $updatedIcal);
         $this->assertResponseStatus($putResponse, [200, 201, 204], 'event update');
+        $updatedResourceUrl = $this->trustedEffectiveUrl($putResponse, $effectiveResourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $updatedResourceUrl);
 
         return [
             'uid'         => $uid,
-            'resourceUrl' => $putResponse->effectiveUrl !== '' ? $putResponse->effectiveUrl : $resourceUrl,
+            'resourceUrl' => $updatedResourceUrl,
             'etag'        => (string) ($putResponse->headers['etag'] ?? '')
         ];
     }
@@ -205,6 +217,8 @@ final class CalDAVProvider implements CalendarProviderInterface
         }
         $response = $this->httpClient->request('DELETE', $resourceUrl, $headers);
         $this->assertResponseStatus($response, [200, 204], 'event deletion');
+        $effectiveResourceUrl = $this->trustedEffectiveUrl($response, $resourceUrl);
+        $this->assertResourceBelongsToCalendar($calendarUrl, $effectiveResourceUrl);
 
         return true;
     }
@@ -227,7 +241,7 @@ final class CalDAVProvider implements CalendarProviderInterface
             throw new CalDAVProviderException('The CalDAV server did not return a current-user-principal.');
         }
 
-        return $this->resolveUrl($response->effectiveUrl, $href);
+        return $this->resolveUrl($this->trustedEffectiveUrl($response, $url), $href);
     }
 
     private function discoverCalendarHomeSet(string $principalUrl): string
@@ -250,7 +264,7 @@ final class CalDAVProvider implements CalendarProviderInterface
             throw new CalDAVProviderException('The CalDAV server did not return a calendar-home-set.');
         }
 
-        return $this->resolveUrl($response->effectiveUrl, $href);
+        return $this->resolveUrl($this->trustedEffectiveUrl($response, $principalUrl), $href);
     }
 
     /**
@@ -323,7 +337,7 @@ final class CalDAVProvider implements CalendarProviderInterface
 
             $canWrite = count(array_intersect($privileges, ['write', 'write-content', 'bind', 'unbind'])) > 0;
             $name = $this->firstNodeValue($xpath, './/d:displayname', $calendarResponse);
-            $url = $this->resolveUrl($response->effectiveUrl, $href);
+            $url = $this->resolveUrl($this->trustedEffectiveUrl($response, $homeSetUrl), $href);
 
             $calendars[] = [
                 'id'           => hash('sha256', $url),
@@ -374,7 +388,14 @@ final class CalDAVProvider implements CalendarProviderInterface
             );
         }
 
-        return $response;
+        $effectiveUrl = $this->trustedEffectiveUrl($response, $url);
+
+        return new CalendarHttpResponse(
+            $response->statusCode,
+            $response->headers,
+            $response->body,
+            $effectiveUrl
+        );
     }
 
     /**
@@ -413,6 +434,9 @@ final class CalDAVProvider implements CalendarProviderInterface
         if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
             throw new CalDAVProviderException('Credentials and fragments are not allowed in CalDAV resource URLs.');
         }
+        if (!$this->originPolicy->isAllowedUrl($url)) {
+            throw new CalDAVProviderException('The CalDAV resource URL belongs to an untrusted origin.');
+        }
 
         return $url;
     }
@@ -427,8 +451,8 @@ final class CalDAVProvider implements CalendarProviderInterface
 
         $calendarPort = $calendar['port'] ?? (strtolower((string) ($calendar['scheme'] ?? '')) === 'https' ? 443 : 80);
         $resourcePort = $resource['port'] ?? (strtolower((string) ($resource['scheme'] ?? '')) === 'https' ? 443 : 80);
-        $calendarPath = rtrim((string) ($calendar['path'] ?? '/'), '/') . '/';
-        $resourcePath = (string) ($resource['path'] ?? '/');
+        $calendarPath = rtrim($this->normalizePath((string) ($calendar['path'] ?? '/')), '/') . '/';
+        $resourcePath = $this->normalizePath((string) ($resource['path'] ?? '/'));
 
         if (strcasecmp((string) ($calendar['scheme'] ?? ''), (string) ($resource['scheme'] ?? '')) !== 0
             || strcasecmp((string) ($calendar['host'] ?? ''), (string) ($resource['host'] ?? '')) !== 0
@@ -436,6 +460,13 @@ final class CalDAVProvider implements CalendarProviderInterface
             || !str_starts_with($resourcePath, $calendarPath)) {
             throw new CalDAVProviderException('The event resource does not belong to the configured calendar.');
         }
+    }
+
+    private function trustedEffectiveUrl(CalendarHttpResponse $response, string $requestedUrl): string
+    {
+        $effectiveUrl = trim($response->effectiveUrl) !== '' ? $response->effectiveUrl : $requestedUrl;
+
+        return $this->normalizeAbsoluteUrl($effectiveUrl);
     }
 
     private function parseXml(string $xml): DOMDocument
@@ -466,23 +497,12 @@ final class CalDAVProvider implements CalendarProviderInterface
     /**
      * @return list<string>
      */
-    private function getEntryUrls(string $url): array
+    private function getEntryUrls(): array
     {
-        $url = trim($url);
-        if ($url === '') {
-            throw new CalDAVProviderException('No CalDAV server URL was configured.');
-        }
-
-        if (!preg_match('#^https?://#i', $url)) {
-            $url = 'https://' . $url;
-        }
-
+        $url = $this->originPolicy->getServerUrl();
         $parts = parse_url($url);
         if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
             throw new CalDAVProviderException('The CalDAV server URL is invalid.');
-        }
-        if (isset($parts['user']) || isset($parts['pass']) || isset($parts['fragment'])) {
-            throw new CalDAVProviderException('Credentials and fragments are not allowed in the CalDAV server URL.');
         }
 
         $path = $parts['path'] ?? '';
@@ -500,28 +520,13 @@ final class CalDAVProvider implements CalendarProviderInterface
 
     private function resolveUrl(string $baseUrl, string $reference): string
     {
-        if (preg_match('#^https?://#i', $reference)) {
-            return $reference;
-        }
-
-        $base = parse_url($baseUrl);
-        if ($base === false || !isset($base['scheme'], $base['host'])) {
+        try {
+            $url = $this->originPolicy->resolveUrl($baseUrl, $reference);
+        } catch (\InvalidArgumentException) {
             throw new CalDAVProviderException('Could not resolve a CalDAV URL.');
         }
 
-        $authority = $base['scheme'] . '://' . $base['host'];
-        if (isset($base['port'])) {
-            $authority .= ':' . $base['port'];
-        }
-
-        if (str_starts_with($reference, '/')) {
-            return $authority . $reference;
-        }
-
-        $basePath = $base['path'] ?? '/';
-        $directory = str_ends_with($basePath, '/') ? $basePath : dirname($basePath) . '/';
-
-        return $authority . $this->normalizePath($directory . $reference);
+        return $this->normalizeAbsoluteUrl($url);
     }
 
     private function normalizePath(string $path): string

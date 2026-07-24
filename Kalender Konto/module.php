@@ -7,6 +7,7 @@ use IPSKalender\CalendarEventTranslation;
 use IPSKalender\CalendarProviderInterface;
 use IPSKalender\CalDAVProvider;
 use IPSKalender\CalDAVProviderException;
+use IPSKalender\CalDAVOriginPolicy;
 use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\GoogleCalendarProviderException;
 use IPSKalender\GoogleOAuthClient;
@@ -20,6 +21,7 @@ require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
 require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
+require_once __DIR__ . '/../libs/CalDAVOriginPolicy.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/GoogleOAuthClient.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
@@ -730,14 +732,18 @@ class KalenderKonto extends IPSModuleStrict
             ? self::APPLE_CALDAV_URL
             : trim($this->ReadPropertyString('ServerURL'));
 
+        $originPolicy = new CalDAVOriginPolicy($serverUrl);
+
         return new CalDAVProvider(
             new CalendarHttpClient(
                 max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
                 $this->ReadPropertyBoolean('VerifyTLS'),
                 trim($this->ReadPropertyString('Username')),
-                $this->ReadPropertyString('Password')
+                $this->ReadPropertyString('Password'),
+                $originPolicy
             ),
-            $serverUrl
+            $serverUrl,
+            $originPolicy
         );
     }
 

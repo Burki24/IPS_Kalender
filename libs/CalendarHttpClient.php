@@ -6,6 +6,8 @@ namespace IPSKalender;
 
 use RuntimeException;
 
+require_once __DIR__ . '/CalDAVOriginPolicy.php';
+
 final class CalendarHttpResponse
 {
     /**
@@ -34,11 +36,14 @@ interface CalendarHttpClientInterface
 
 final class CalendarHttpClient implements CalendarHttpClientInterface
 {
+    private const MAX_REDIRECTS = 5;
+
     public function __construct(
         private readonly int $timeout,
         private readonly bool $verifyTLS,
         private readonly string $username = '',
-        private readonly string $password = ''
+        private readonly string $password = '',
+        private readonly ?CalDAVOriginPolicy $originPolicy = null
     ) {
     }
 
@@ -47,6 +52,56 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
      */
     public function request(string $method, string $url, array $headers = [], string $body = ''): CalendarHttpResponse
     {
+        if ($this->originPolicy === null) {
+            return $this->executeRequest($method, $url, $headers, $body, true);
+        }
+
+        if (!$this->originPolicy->isAllowedUrl($url)) {
+            throw new CalendarHttpException('The CalDAV request URL belongs to an untrusted origin.');
+        }
+
+        $currentUrl = $url;
+        for ($redirectCount = 0; ; $redirectCount++) {
+            $response = $this->executeRequest($method, $currentUrl, $headers, $body, false);
+            if (!in_array($response->statusCode, [301, 302, 303, 307, 308], true)) {
+                return $response;
+            }
+
+            $location = trim((string) ($response->headers['location'] ?? ''));
+            if ($location === '') {
+                return $response;
+            }
+            if ($redirectCount >= self::MAX_REDIRECTS) {
+                throw new CalendarHttpException('Too many HTTP redirects.');
+            }
+
+            try {
+                $redirectUrl = $this->originPolicy->resolveUrl(
+                    $response->effectiveUrl !== '' ? $response->effectiveUrl : $currentUrl,
+                    $location
+                );
+            } catch (\InvalidArgumentException $exception) {
+                throw new CalendarHttpException('The CalDAV redirect URL is invalid.', 0, $exception);
+            }
+
+            if (!$this->originPolicy->isAllowedUrl($redirectUrl)) {
+                throw new CalendarHttpException('A CalDAV redirect to an untrusted origin was blocked.');
+            }
+
+            $currentUrl = $redirectUrl;
+        }
+    }
+
+    /**
+     * @param array<string, string> $headers
+     */
+    private function executeRequest(
+        string $method,
+        string $url,
+        array $headers,
+        string $body,
+        bool $followRedirects
+    ): CalendarHttpResponse {
         if (!function_exists('curl_init')) {
             throw new CalendarHttpException('The PHP cURL extension is not available.');
         }
@@ -66,8 +121,8 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
             CURLOPT_URL             => $url,
             CURLOPT_CUSTOMREQUEST   => strtoupper($method),
             CURLOPT_RETURNTRANSFER  => true,
-            CURLOPT_FOLLOWLOCATION  => true,
-            CURLOPT_MAXREDIRS       => 5,
+            CURLOPT_FOLLOWLOCATION  => $followRedirects,
+            CURLOPT_MAXREDIRS       => self::MAX_REDIRECTS,
             CURLOPT_CONNECTTIMEOUT  => min($this->timeout, 15),
             CURLOPT_TIMEOUT         => $this->timeout,
             CURLOPT_SSL_VERIFYPEER  => $this->verifyTLS,
