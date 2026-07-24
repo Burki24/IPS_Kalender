@@ -57,6 +57,24 @@ class KalenderKonfigurator extends IPSModuleStrict
         );
     }
 
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        switch ($Ident) {
+            case 'FormRefreshCalendars':
+                $this->RefreshCalendars();
+                $status = IPS_GetInstance($this->InstanceID)['InstanceStatus'] ?? 0;
+                $this->UpdateFormField(
+                    $status === IS_ACTIVE ? 'RefreshSuccessPopup' : 'RefreshFailurePopup',
+                    'visible',
+                    true
+                );
+                break;
+
+            default:
+                throw new InvalidArgumentException('Unsupported form action: ' . $Ident);
+        }
+    }
+
     public function RefreshCalendars(): string
     {
         try {

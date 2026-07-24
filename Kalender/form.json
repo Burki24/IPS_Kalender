@@ -127,12 +127,38 @@
         {
             "type": "Button",
             "caption": "Synchronize now",
-            "onClick": "if (IPSKAL_Synchronize($id)) { echo IPS_Translate($id, 'Synchronization successful.'); } else { $status = json_decode(IPSKAL_GetCalendarStatus($id), true); echo $status['lastError'] ?? IPS_Translate($id, 'Synchronization failed.'); }"
+            "onClick": "IPS_RequestAction($id, 'FormSynchronize', '');"
         },
         {
             "type": "Button",
             "caption": "Clear cache",
             "onClick": "IPSKAL_ClearCache($id);"
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationSuccessPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization successful."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationFailurePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization failed. Please check the instance status for details."
+                    }
+                ]
+            }
         }
     ],
     "status": [

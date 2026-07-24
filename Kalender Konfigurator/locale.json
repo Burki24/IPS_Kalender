@@ -17,7 +17,9 @@
             "The calendar account did not return a response.": "Das Kalenderkonto hat keine Antwort zurückgegeben.",
             "The calendar account rejected the request.": "Das Kalenderkonto hat die Anfrage abgelehnt.",
             "The calendar account returned invalid calendar data.": "Das Kalenderkonto hat ungültige Kalenderdaten zurückgegeben.",
-            "Unknown error.": "Unbekannter Fehler."
+            "Unknown error.": "Unbekannter Fehler.",
+            "Calendars refreshed.": "Kalender aktualisiert.",
+            "Calendar discovery failed. Please check the instance status for details.": "Kalendersuche fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details."
         }
     }
 }

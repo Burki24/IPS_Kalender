@@ -156,11 +156,27 @@ class KalenderAnsicht extends IPSModuleStrict
     {
         try {
             switch ($Ident) {
+                case 'FormSynchronizeCalendars':
+                    $this->UpdateFormField(
+                        $this->SynchronizeCalendars() ? 'SynchronizationSuccessPopup' : 'SynchronizationFailurePopup',
+                        'visible',
+                        true
+                    );
+                    break;
+
+                case 'FormRestoreCalendars':
+                    $this->UpdateFormField(
+                        $this->SelectAllCalendars() ? 'CalendarSelectionRestoredPopup' : 'NoCalendarInstancesPopup',
+                        'visible',
+                        true
+                    );
+                    break;
+
                 case 'Refresh':
                     $success = $this->SynchronizeCalendars();
                     $this->sendToast(
                         $success ? 'success' : 'error',
-                        $success ? $this->Translate('Calendars synchronized.') : $this->Translate('Synchronization failed.')
+                        $success ? 'Calendars synchronized.' : 'Synchronization failed.'
                     );
                     break;
 
@@ -183,7 +199,7 @@ class KalenderAnsicht extends IPSModuleStrict
                     if (!is_array($result) || !($result['success'] ?? false)) {
                         throw new RuntimeException((string) ($result['error'] ?? $this->Translate('Event creation failed.')));
                     }
-                    $this->sendToast('success', $this->Translate('Event created.'));
+                    $this->sendToast('success', 'Event created.');
                     $this->broadcastState();
                     break;
 
@@ -206,7 +222,7 @@ class KalenderAnsicht extends IPSModuleStrict
                     if (!is_array($result) || !($result['success'] ?? false)) {
                         throw new RuntimeException((string) ($result['error'] ?? $this->Translate('Event update failed.')));
                     }
-                    $this->sendToast('success', $this->Translate('Event updated.'));
+                    $this->sendToast('success', 'Event updated.');
                     $this->broadcastState();
                     break;
 
@@ -223,7 +239,7 @@ class KalenderAnsicht extends IPSModuleStrict
                     )) {
                         throw new RuntimeException($this->Translate('Event deletion failed.'));
                     }
-                    $this->sendToast('success', $this->Translate('Event deleted.'));
+                    $this->sendToast('success', 'Event deleted.');
                     $this->broadcastState();
                     break;
 

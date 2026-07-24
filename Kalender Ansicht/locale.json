@@ -83,7 +83,8 @@
             "Unsupported visualization action: %s": "Nicht unterstützte Visualisierungsaktion: %s",
             "The calendar selection is invalid.": "Die Kalenderauswahl ist ungültig.",
             "The visualization request is invalid.": "Die Visualisierungsanfrage ist ungültig.",
-            "The selected calendar is not writable.": "Der ausgewählte Kalender ist schreibgeschützt."
+            "The selected calendar is not writable.": "Der ausgewählte Kalender ist schreibgeschützt.",
+            "Synchronization failed. Please check the instance status for details.": "Synchronisation fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details."
         }
     }
 }

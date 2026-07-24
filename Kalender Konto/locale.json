@@ -177,7 +177,11 @@
             "event creation": "Terminerstellung",
             "event retrieval": "Terminabruf",
             "event update": "Terminänderung",
-            "event deletion": "Terminlöschung"
+            "event deletion": "Terminlöschung",
+            "Connection test successful.": "Verbindungstest erfolgreich.",
+            "Connection test failed. Please check the instance status for details.": "Verbindungstest fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details.",
+            "Synchronization failed. Please check the instance status for details.": "Synchronisation fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details.",
+            "Google authorization could not be started. Please check the instance status for details.": "Die Google-Autorisierung konnte nicht gestartet werden. Bitte prüfen Sie den Instanzstatus für weitere Details."
         }
     }
 }

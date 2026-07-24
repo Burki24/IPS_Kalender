@@ -218,6 +218,46 @@ class KalenderKonto extends IPSModuleStrict
         );
     }
 
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        switch ($Ident) {
+            case 'FormTestConnection':
+                $result = json_decode($this->TestConnection(), true);
+                $this->UpdateFormField(
+                    is_array($result) && ($result['success'] ?? false)
+                        ? 'ConnectionSuccessPopup'
+                        : 'ConnectionFailurePopup',
+                    'visible',
+                    true
+                );
+                break;
+
+            case 'FormSynchronize':
+                $this->UpdateFormField(
+                    $this->Synchronize() ? 'SynchronizationSuccessPopup' : 'SynchronizationFailurePopup',
+                    'visible',
+                    true
+                );
+                break;
+
+            case 'FormClearCache':
+                $this->ClearCache();
+                $this->UpdateFormField('CacheClearedPopup', 'visible', true);
+                break;
+
+            case 'FormGoogleAuthorizationFailed':
+                $this->UpdateFormField('GoogleAuthorizationFailedPopup', 'visible', true);
+                break;
+
+            case 'FormGoogleRedirectUnavailable':
+                $this->UpdateFormField('GoogleRedirectUnavailablePopup', 'visible', true);
+                break;
+
+            default:
+                throw new InvalidArgumentException('Unsupported form action: ' . $Ident);
+        }
+    }
+
     public function ConnectGoogle(): string
     {
         try {

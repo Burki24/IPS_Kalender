@@ -541,7 +541,7 @@
         }
         if (!message || typeof message !== 'object') return;
         if (message.type === 'toast') {
-            showToast(message.message || '', message.level || 'success');
+            showToast(t(message.message || ''), message.level || 'success');
             return;
         }
         if (message.type !== 'state' || !message.payload) return;

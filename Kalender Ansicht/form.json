@@ -196,12 +196,64 @@
         {
             "type": "Button",
             "caption": "Synchronize calendars",
-            "onClick": "echo IPSKALVIEW_SynchronizeCalendars($id) ? IPS_Translate($id, 'Synchronization successful.') : IPS_Translate($id, 'Synchronization failed.');"
+            "onClick": "IPS_RequestAction($id, 'FormSynchronizeCalendars', '');"
         },
         {
             "type": "Button",
             "caption": "Restore all calendar instances",
-            "onClick": "echo IPSKALVIEW_SelectAllCalendars($id) ? IPS_Translate($id, 'Calendar selection restored.') : IPS_Translate($id, 'No calendar instances found.');"
+            "onClick": "IPS_RequestAction($id, 'FormRestoreCalendars', '');"
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationSuccessPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization successful."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationFailurePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization failed. Please check the instance status for details."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "CalendarSelectionRestoredPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Calendar selection restored."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "NoCalendarInstancesPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "No calendar instances found."
+                    }
+                ]
+            }
         }
     ],
     "status": [

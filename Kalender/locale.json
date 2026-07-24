@@ -52,7 +52,8 @@
             "The %s must be a JSON object.": "%s muss ein JSON-Objekt sein.",
             "Unknown calendar error.": "Unbekannter Kalenderfehler.",
             "Invalid JSON data.": "Ungültige JSON-Daten.",
-            "The event was changed by another client. Synchronize the calendar and try again.": "Der Termin wurde von einem anderen Client geändert. Synchronisieren Sie den Kalender und versuchen Sie es erneut."
+            "The event was changed by another client. Synchronize the calendar and try again.": "Der Termin wurde von einem anderen Client geändert. Synchronisieren Sie den Kalender und versuchen Sie es erneut.",
+            "Synchronization failed. Please check the instance status for details.": "Synchronisation fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details."
         }
     }
 }

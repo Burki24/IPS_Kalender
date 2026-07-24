@@ -81,6 +81,22 @@ class Kalender extends IPSModuleStrict
         );
     }
 
+    public function RequestAction(string $Ident, mixed $Value): void
+    {
+        switch ($Ident) {
+            case 'FormSynchronize':
+                $this->UpdateFormField(
+                    $this->Synchronize() ? 'SynchronizationSuccessPopup' : 'SynchronizationFailurePopup',
+                    'visible',
+                    true
+                );
+                break;
+
+            default:
+                throw new InvalidArgumentException('Unsupported form action: ' . $Ident);
+        }
+    }
+
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();

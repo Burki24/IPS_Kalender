@@ -253,7 +253,7 @@
             "name": "GoogleShowRedirectURI",
             "caption": "Show redirect URI",
             "visible": false,
-            "onClick": "echo IPSKALACC_GetGoogleRedirectURI($id);"
+            "onClick": "$result = IPSKALACC_GetGoogleRedirectURI($id); if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) { echo $result; } else { IPS_RequestAction($id, 'FormGoogleRedirectUnavailable', ''); }"
         },
         {
             "type": "ValidationTextBox",
@@ -278,7 +278,7 @@
             "name": "GoogleConnect",
             "caption": "Connect Google account",
             "visible": false,
-            "onClick": "echo IPSKALACC_ConnectGoogle($id);"
+            "onClick": "$result = IPSKALACC_ConnectGoogle($id); if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) { echo $result; } else { IPS_RequestAction($id, 'FormGoogleAuthorizationFailed', ''); }"
         },
         {
             "type": "Button",
@@ -286,7 +286,7 @@
             "caption": "Disconnect Google account",
             "visible": false,
             "confirm": "Do you really want to disconnect the Google account?",
-            "onClick": "echo IPSKALACC_DisconnectGoogle($id) ? IPS_Translate($id, 'Google account disconnected.') : IPS_Translate($id, 'Could not disconnect Google account.');"
+            "onClick": "IPSKALACC_DisconnectGoogle($id);"
         },
         {
             "type": "Select",
@@ -370,12 +370,12 @@
         {
             "type": "Button",
             "caption": "Test connection",
-            "onClick": "echo IPSKALACC_TestConnection($id);"
+            "onClick": "IPS_RequestAction($id, 'FormTestConnection', '');"
         },
         {
             "type": "Button",
             "caption": "Synchronize now",
-            "onClick": "echo IPSKALACC_Synchronize($id) ? IPS_Translate($id, 'Synchronization successful.') : IPS_Translate($id, 'Synchronization failed.');"
+            "onClick": "IPS_RequestAction($id, 'FormSynchronize', '');"
         },
         {
             "type": "Button",
@@ -386,7 +386,98 @@
             "type": "Button",
             "caption": "Clear cache",
             "confirm": "Do you really want to clear all cached calendars and feed data?",
-            "onClick": "IPSKALACC_ClearCache($id); echo IPS_Translate($id, 'Cache cleared.');"
+            "onClick": "IPS_RequestAction($id, 'FormClearCache', '');"
+        },
+        {
+            "type": "PopupAlert",
+            "name": "ConnectionSuccessPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Connection test successful."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "ConnectionFailurePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Connection test failed. Please check the instance status for details."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationSuccessPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization successful."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "SynchronizationFailurePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Synchronization failed. Please check the instance status for details."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "CacheClearedPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Cache cleared."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "GoogleAuthorizationFailedPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Google authorization could not be started. Please check the instance status for details."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "GoogleRedirectUnavailablePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Authorized redirect URI is unavailable."
+                    }
+                ]
+            }
         }
     ],
     "status": [

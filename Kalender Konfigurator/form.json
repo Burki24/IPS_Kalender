@@ -34,7 +34,33 @@
         {
             "type": "Button",
             "caption": "Refresh calendars",
-            "onClick": "echo IPSKALCFG_RefreshCalendars($id);"
+            "onClick": "IPS_RequestAction($id, 'FormRefreshCalendars', '');"
+        },
+        {
+            "type": "PopupAlert",
+            "name": "RefreshSuccessPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Calendars refreshed."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "RefreshFailurePopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Calendar discovery failed. Please check the instance status for details."
+                    }
+                ]
+            }
         }
     ],
     "status": [
