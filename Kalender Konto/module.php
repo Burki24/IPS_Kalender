@@ -9,11 +9,11 @@ use IPSKalender\CalDAVProvider;
 use IPSKalender\CalDAVProviderException;
 use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\GoogleCalendarProviderException;
+use IPSKalender\GoogleOAuthClient;
+use IPSKalender\GoogleOAuthException;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\ICalendarSubscriptionProvider;
-use IPSKalender\OAuthBridgeClient;
-use IPSKalender\OAuthBridgeException;
 use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
@@ -21,16 +21,18 @@ require_once __DIR__ . '/../libs/CalendarHttpClient.php';
 require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/GoogleOAuthClient.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
-require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
 class KalenderKonto extends IPSModuleStrict
 {
     private const DATA_ID_TO_CHILD = '{8ED646DD-88E9-ACE2-95D5-9766EED4B5B0}';
     private const APPLE_CALDAV_URL = 'https://caldav.icloud.com';
-    private const GOOGLE_OAUTH_IDENTIFIER = 'ipskalender_google';
+    private const CONNECT_CONTROL_MODULE_ID = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
+    private const GOOGLE_OAUTH_HOOK_PREFIX = 'ips-kalender-google-';
+    private const GOOGLE_OAUTH_STATE_TTL = 900;
 
     private const PROVIDER_APPLE = 0;
     private const PROVIDER_CALDAV = 1;
@@ -53,6 +55,8 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyString('ServerURL', self::APPLE_CALDAV_URL);
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
+        $this->RegisterPropertyString('GoogleClientID', '');
+        $this->RegisterPropertyString('GoogleClientSecret', '');
         $this->RegisterPropertyString('CalendarName', '');
         $this->RegisterPropertyInteger('ICalendarTranslationProfile', CalendarEventTranslation::NONE);
         $this->RegisterPropertyString('ICalendarFeeds', '[]');
@@ -67,9 +71,11 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterAttributeString('LastError', '');
         $this->RegisterAttributeString('GoogleRefreshToken', '');
         $this->RegisterAttributeString('GoogleAccount', '');
+        $this->RegisterAttributeString('GoogleTokenClientID', '');
+        $this->RegisterAttributeString('GoogleOAuthState', '');
 
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_ScheduledSynchronize($_IPS[\'TARGET\']);');
-        $this->RegisterOAuth(self::GOOGLE_OAUTH_IDENTIFIER);
+        $this->RegisterHook($this->googleOAuthHookAddress());
     }
 
     public function GetConfigurationForm(): string
@@ -109,9 +115,20 @@ class KalenderKonto extends IPSModuleStrict
                 $element['caption'] = $isIcs
                     ? $this->Translate('Account custom interval')
                     : $this->Translate('Custom interval');
-            } elseif (in_array($name, ['GoogleStatus', 'GoogleConnect', 'GoogleDisconnect'], true)) {
+            } elseif (in_array($name, [
+                'GoogleOAuthHint',
+                'GoogleRedirectURI',
+                'GoogleShowRedirectURI',
+                'GoogleClientID',
+                'GoogleClientSecret',
+                'GoogleStatus',
+                'GoogleConnect',
+                'GoogleDisconnect'
+            ], true)) {
                 $element['visible'] = $isGoogle;
-                if ($name === 'GoogleStatus') {
+                if ($name === 'GoogleRedirectURI') {
+                    $element['caption'] = $this->googleRedirectUriText();
+                } elseif ($name === 'GoogleStatus') {
                     $element['caption'] = $this->googleStatusText();
                 } elseif ($name === 'GoogleConnect') {
                     $element['visible'] = $isGoogle && !$this->isGoogleConnected();
@@ -152,6 +169,12 @@ class KalenderKonto extends IPSModuleStrict
             $isIcs ? $this->Translate('Account custom interval') : $this->Translate('Custom interval')
         );
         $this->UpdateFormField('GoogleStatus', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleOAuthHint', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleRedirectURI', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleRedirectURI', 'caption', $this->googleRedirectUriText());
+        $this->UpdateFormField('GoogleShowRedirectURI', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleClientID', 'visible', $isGoogle);
+        $this->UpdateFormField('GoogleClientSecret', 'visible', $isGoogle);
         $this->UpdateFormField('GoogleConnect', 'visible', $isGoogle && !$this->isGoogleConnected());
         $this->UpdateFormField('GoogleDisconnect', 'visible', $isGoogle && $this->isGoogleConnected());
 
@@ -195,10 +218,32 @@ class KalenderKonto extends IPSModuleStrict
 
     public function ConnectGoogle(): string
     {
-        // Re-register immediately before authentication so the callback reaches
-        // the account instance whose button was pressed, even with multiple accounts.
-        $this->RegisterOAuth(self::GOOGLE_OAUTH_IDENTIFIER);
-        return $this->createOAuthBridgeClient()->getAuthorizationUrl((string) IPS_GetLicensee());
+        try {
+            $state = bin2hex(random_bytes(32));
+            $this->WriteAttributeString(
+                'GoogleOAuthState',
+                json_encode(
+                    ['value' => $state, 'createdAt' => time()],
+                    JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
+                )
+            );
+            $this->SetBuffer('GoogleAccessToken', '');
+
+            return $this->createGoogleOAuthClient()->getAuthorizationUrl($state);
+        } catch (Throwable $exception) {
+            $this->WriteAttributeString('GoogleOAuthState', '');
+            return $this->Translate('Google authorization could not be started') . ': '
+                . $this->handleProviderError($exception);
+        }
+    }
+
+    public function GetGoogleRedirectURI(): string
+    {
+        try {
+            return $this->googleOAuthRedirectUri();
+        } catch (Throwable $exception) {
+            return $this->sanitizeError($exception->getMessage());
+        }
     }
 
     public function DisconnectGoogle(): bool
@@ -220,6 +265,8 @@ class KalenderKonto extends IPSModuleStrict
 
         $this->WriteAttributeString('GoogleRefreshToken', '');
         $this->WriteAttributeString('GoogleAccount', '');
+        $this->WriteAttributeString('GoogleTokenClientID', '');
+        $this->WriteAttributeString('GoogleOAuthState', '');
         $this->SetBuffer('GoogleAccessToken', '');
         $this->ClearCache();
         $this->SetStatus($this->ReadPropertyBoolean('Active') ? self::STATUS_CONFIGURATION_MISSING : IS_INACTIVE);
@@ -765,8 +812,16 @@ class KalenderKonto extends IPSModuleStrict
             }
         }
 
-        if ($provider === self::PROVIDER_GOOGLE && !$this->isGoogleConnected()) {
-            return 'Google Calendar is not connected yet.';
+        if ($provider === self::PROVIDER_GOOGLE) {
+            if (trim($this->ReadPropertyString('GoogleClientID')) === '') {
+                return 'The Google OAuth client ID is missing.';
+            }
+            if ($this->ReadPropertyString('GoogleClientSecret') === '') {
+                return 'The Google OAuth client secret is missing.';
+            }
+            if (!$this->isGoogleConnected()) {
+                return 'Google Calendar is not connected yet.';
+            }
         }
 
         return '';
@@ -815,7 +870,7 @@ class KalenderKonto extends IPSModuleStrict
             $this->SetStatus(in_array($exception->httpStatus, [401, 403], true)
                 ? self::STATUS_AUTHENTICATION_FAILED
                 : self::STATUS_CONNECTION_FAILED);
-        } elseif ($exception instanceof OAuthBridgeException) {
+        } elseif ($exception instanceof GoogleOAuthException) {
             $this->SetStatus(self::STATUS_AUTHENTICATION_FAILED);
         } elseif ($exception instanceof JsonException) {
             $this->SetStatus(self::STATUS_INVALID_RESPONSE);
@@ -826,31 +881,62 @@ class KalenderKonto extends IPSModuleStrict
         return $message;
     }
 
-    protected function ProcessOAuthData(): void
+    protected function ProcessHookData(): void
     {
         try {
             if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET') {
-                throw new OAuthBridgeException('Unsupported OAuth callback method.');
-            }
-            $oauthError = trim((string) ($_GET['error_description'] ?? $_GET['error'] ?? ''));
-            if ($oauthError !== '') {
-                throw new OAuthBridgeException($oauthError);
+                throw new GoogleOAuthException('Unsupported OAuth callback method.');
             }
 
-            $tokens = $this->createOAuthBridgeClient()->exchangeAuthorizationCode((string) ($_GET['code'] ?? ''));
+            $storedState = json_decode($this->ReadAttributeString('GoogleOAuthState'), true);
+            $receivedState = trim((string) ($_GET['state'] ?? ''));
+            if (!is_array($storedState)
+                || trim((string) ($storedState['value'] ?? '')) === ''
+                || $receivedState === ''
+                || !hash_equals((string) $storedState['value'], $receivedState)
+                || (int) ($storedState['createdAt'] ?? 0) < time() - self::GOOGLE_OAUTH_STATE_TTL) {
+                throw new GoogleOAuthException('The Google OAuth state is invalid or has expired.');
+            }
+            $this->WriteAttributeString('GoogleOAuthState', '');
+
+            $oauthError = trim((string) ($_GET['error_description'] ?? $_GET['error'] ?? ''));
+            if ($oauthError !== '') {
+                throw new GoogleOAuthException($oauthError);
+            }
+
+            $tokens = $this->createGoogleOAuthClient()->exchangeAuthorizationCode(
+                (string) ($_GET['code'] ?? '')
+            );
             $this->storeGoogleTokens($tokens);
             $this->WriteAttributeString('LastError', '');
             $this->SetStatus($this->ReadPropertyBoolean('Active') ? IS_ACTIVE : IS_INACTIVE);
             $this->ReloadForm();
-            echo 'Google Calendar was connected successfully. You can close this window.';
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo htmlspecialchars(
+                $this->Translate('Google Calendar was connected successfully. You can close this window.'),
+                ENT_QUOTES | ENT_SUBSTITUTE,
+                'UTF-8'
+            );
         } catch (Throwable $exception) {
             $message = $this->handleProviderError($exception);
-            echo 'Google Calendar could not be connected: ' . htmlspecialchars($message, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            http_response_code(400);
+            header('Content-Type: text/html; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo htmlspecialchars(
+                $this->Translate('Google Calendar could not be connected') . ': ' . $this->Translate($message),
+                ENT_QUOTES | ENT_SUBSTITUTE,
+                'UTF-8'
+            );
         }
     }
 
     private function getGoogleAccessToken(): string
     {
+        if (!$this->isGoogleConnected()) {
+            throw new GoogleOAuthException('Google Calendar is not connected yet.');
+        }
+
         $cached = json_decode($this->GetBuffer('GoogleAccessToken'), true);
         if (is_array($cached)
             && trim((string) ($cached['token'] ?? '')) !== ''
@@ -858,7 +944,7 @@ class KalenderKonto extends IPSModuleStrict
             return (string) $cached['token'];
         }
 
-        $tokens = $this->createOAuthBridgeClient()->refreshAccessToken(
+        $tokens = $this->createGoogleOAuthClient()->refreshAccessToken(
             $this->ReadAttributeString('GoogleRefreshToken')
         );
         $this->storeGoogleTokens($tokens);
@@ -873,15 +959,62 @@ class KalenderKonto extends IPSModuleStrict
         if ($tokens['refreshToken'] !== '') {
             $this->WriteAttributeString('GoogleRefreshToken', $tokens['refreshToken']);
         }
+        $this->WriteAttributeString(
+            'GoogleTokenClientID',
+            trim($this->ReadPropertyString('GoogleClientID'))
+        );
         $this->SetBuffer('GoogleAccessToken', json_encode(
             ['token' => $tokens['accessToken'], 'expiresAt' => $tokens['expiresAt']],
             JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR
         ));
     }
 
-    private function createOAuthBridgeClient(): OAuthBridgeClient
+    private function createGoogleOAuthClient(): GoogleOAuthClient
     {
-        return new OAuthBridgeClient($this->createUnauthenticatedHttpClient(), self::GOOGLE_OAUTH_IDENTIFIER);
+        return new GoogleOAuthClient(
+            $this->createUnauthenticatedHttpClient(),
+            trim($this->ReadPropertyString('GoogleClientID')),
+            $this->ReadPropertyString('GoogleClientSecret'),
+            $this->googleOAuthRedirectUri()
+        );
+    }
+
+    private function googleOAuthHookAddress(): string
+    {
+        return self::GOOGLE_OAUTH_HOOK_PREFIX . $this->InstanceID;
+    }
+
+    private function googleOAuthRedirectUri(): string
+    {
+        foreach (IPS_GetInstanceListByModuleID(self::CONNECT_CONTROL_MODULE_ID) as $connectId) {
+            $instance = IPS_GetInstance($connectId);
+            if ((int) ($instance['InstanceStatus'] ?? 0) !== IS_ACTIVE) {
+                continue;
+            }
+
+            $connectUrl = trim((string) CC_GetConnectURL($connectId));
+            if (filter_var($connectUrl, FILTER_VALIDATE_URL) === false
+                || strtolower((string) parse_url($connectUrl, PHP_URL_SCHEME)) !== 'https') {
+                continue;
+            }
+
+            return rtrim($connectUrl, '/') . '/hook/' . rawurlencode($this->googleOAuthHookAddress());
+        }
+
+        throw new GoogleOAuthException('An active Symcon Connect connection is required for Google OAuth.');
+    }
+
+    private function googleRedirectUriText(): string
+    {
+        try {
+            return sprintf(
+                $this->Translate('Authorized redirect URI: %s'),
+                $this->googleOAuthRedirectUri()
+            );
+        } catch (Throwable $exception) {
+            return $this->Translate('Authorized redirect URI is unavailable') . ': '
+                . $this->Translate($this->sanitizeError($exception->getMessage()));
+        }
     }
 
     private function createUnauthenticatedHttpClient(): CalendarHttpClient
@@ -902,11 +1035,19 @@ class KalenderKonto extends IPSModuleStrict
 
     private function isGoogleConnected(): bool
     {
-        return trim($this->ReadAttributeString('GoogleRefreshToken')) !== '';
+        $clientId = trim($this->ReadPropertyString('GoogleClientID'));
+
+        return $clientId !== ''
+            && trim($this->ReadAttributeString('GoogleRefreshToken')) !== ''
+            && hash_equals($clientId, $this->ReadAttributeString('GoogleTokenClientID'));
     }
 
     private function googleStatusText(): string
     {
+        if (trim($this->ReadPropertyString('GoogleClientID')) === ''
+            || $this->ReadPropertyString('GoogleClientSecret') === '') {
+            return $this->Translate('Enter your personal Google OAuth client credentials.');
+        }
         if (!$this->isGoogleConnected()) {
             return $this->Translate('Google account is not connected.');
         }
@@ -921,6 +1062,14 @@ class KalenderKonto extends IPSModuleStrict
         $password = $this->ReadPropertyString('Password');
         if ($password !== '') {
             $message = str_replace($password, '***', $message);
+        }
+        foreach ([
+            $this->ReadPropertyString('GoogleClientSecret'),
+            $this->ReadAttributeString('GoogleRefreshToken')
+        ] as $secret) {
+            if ($secret !== '') {
+                $message = str_replace($secret, '***', $message);
+            }
         }
         if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS) {
             foreach ($this->iCalendarSubscriptions() as $subscription) {

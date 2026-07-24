@@ -6,18 +6,18 @@ use IPSKalender\CalendarHttpClientInterface;
 use IPSKalender\CalendarHttpResponse;
 use IPSKalender\CalendarEventTranslation;
 use IPSKalender\GoogleCalendarProvider;
+use IPSKalender\GoogleOAuthClient;
 use IPSKalender\ICalendarCodec;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\ICalendarSubscriptionProvider;
-use IPSKalender\OAuthBridgeClient;
 use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/GoogleOAuthClient.php';
 require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
-require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
 final class FakeHttpClient implements CalendarHttpClientInterface
@@ -187,25 +187,71 @@ assertTrueValue(
 );
 assertSameValue('DELETE', $writeClient->requests[2]['method'], 'Events must be deleted via DELETE.');
 
-$oauthClient = new FakeHttpClient([
+$personalOAuthHttpClient = new FakeHttpClient([
     response(200, [
-        'access_token'  => 'new-access-token',
-        'refresh_token' => 'new-refresh-token',
+        'access_token'  => 'personal-access-token',
+        'refresh_token' => 'personal-refresh-token',
         'expires_in'    => 3600,
         'token_type'    => 'Bearer'
     ]),
     response(200, [
-        'access_token' => 'refreshed-access-token',
-        'expires_in'   => 3600,
+        'access_token' => 'personal-refreshed-access-token',
+        'expires_in'   => 1800,
         'token_type'   => 'Bearer'
     ])
 ]);
-$bridge = new OAuthBridgeClient($oauthClient, 'ipskalender_google');
-$tokens = $bridge->exchangeAuthorizationCode('authorization-code');
-assertSameValue('new-refresh-token', $tokens['refreshToken'], 'The initial refresh token must be retained.');
-$tokens = $bridge->refreshAccessToken('new-refresh-token');
-assertSameValue('new-refresh-token', $tokens['refreshToken'], 'Refresh responses may omit an unchanged refresh token.');
-assertTrueValue(str_contains($bridge->getAuthorizationUrl('User Name'), 'User%20Name'), 'The licensee must be URL encoded.');
+$personalOAuth = new GoogleOAuthClient(
+    $personalOAuthHttpClient,
+    'personal-client-id',
+    'personal-client-secret',
+    'https://example.ipmagic.de/hook/ips-kalender-google-12345'
+);
+$authorizationUrl = $personalOAuth->getAuthorizationUrl('secure-state');
+$authorizationQuery = [];
+parse_str((string) parse_url($authorizationUrl, PHP_URL_QUERY), $authorizationQuery);
+assertSameValue('personal-client-id', $authorizationQuery['client_id'], 'Personal OAuth must use the configured client ID.');
+assertSameValue(
+    'https://example.ipmagic.de/hook/ips-kalender-google-12345',
+    $authorizationQuery['redirect_uri'],
+    'Personal OAuth must use the instance-specific Symcon Connect callback.'
+);
+assertSameValue('secure-state', $authorizationQuery['state'], 'Personal OAuth must protect the callback with state.');
+assertSameValue('offline', $authorizationQuery['access_type'], 'Personal OAuth must request offline access.');
+assertSameValue('consent', $authorizationQuery['prompt'], 'Personal OAuth must request consent so Google returns a refresh token.');
+assertTrueValue(
+    str_contains($authorizationQuery['scope'], 'calendar.calendarlist.readonly')
+        && str_contains($authorizationQuery['scope'], 'calendar.events'),
+    'Personal OAuth must request calendar discovery and event access.'
+);
+assertTrueValue(
+    !str_contains($authorizationUrl, 'personal-client-secret'),
+    'The client secret must never be included in the authorization URL.'
+);
+
+$personalTokens = $personalOAuth->exchangeAuthorizationCode('personal-authorization-code');
+assertSameValue('personal-refresh-token', $personalTokens['refreshToken'], 'The authorization exchange must retain the refresh token.');
+$tokenRequest = $personalOAuthHttpClient->requests[0];
+$tokenBody = [];
+parse_str($tokenRequest['body'], $tokenBody);
+assertSameValue('POST', $tokenRequest['method'], 'The authorization code must be exchanged via POST.');
+assertSameValue('authorization_code', $tokenBody['grant_type'], 'The token exchange must use the authorization-code grant.');
+assertSameValue('personal-client-secret', $tokenBody['client_secret'], 'The token exchange must authenticate the personal client.');
+assertSameValue(
+    'https://example.ipmagic.de/hook/ips-kalender-google-12345',
+    $tokenBody['redirect_uri'],
+    'The token exchange must repeat the exact callback URI.'
+);
+
+$personalTokens = $personalOAuth->refreshAccessToken('personal-refresh-token');
+assertSameValue(
+    'personal-refresh-token',
+    $personalTokens['refreshToken'],
+    'A refresh response may omit an unchanged personal refresh token.'
+);
+$refreshBody = [];
+parse_str($personalOAuthHttpClient->requests[1]['body'], $refreshBody);
+assertSameValue('refresh_token', $refreshBody['grant_type'], 'Token renewal must use the refresh-token grant.');
+assertSameValue('personal-refresh-token', $refreshBody['refresh_token'], 'Token renewal must send the stored refresh token.');
 
 $icalFeed = "BEGIN:VCALENDAR\r\n"
     . "VERSION:2.0\r\n"
@@ -707,8 +753,18 @@ assertSameValue(
 );
 
 $calendarModuleSource = file_get_contents(__DIR__ . '/../Kalender/module.php');
+$accountModuleSource = file_get_contents(__DIR__ . '/../Kalender Konto/module.php');
 $viewModuleSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.php');
 $viewTemplateSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.html');
+assertTrueValue(
+    is_string($accountModuleSource)
+        && str_contains($accountModuleSource, "RegisterPropertyString('GoogleClientID'")
+        && str_contains($accountModuleSource, "RegisterPropertyString('GoogleClientSecret'")
+        && str_contains($accountModuleSource, 'RegisterHook($this->googleOAuthHookAddress())')
+        && str_contains($accountModuleSource, 'protected function ProcessHookData(): void')
+        && !str_contains($accountModuleSource, "RegisterOAuth('ipskalender_google')"),
+    'The calendar account must use a personal Google OAuth client with an instance-specific webhook.'
+);
 assertTrueValue(
     is_string($calendarModuleSource)
         && str_contains($calendarModuleSource, 'RegisterMessage(0, IPS_KERNELSTARTED)')

@@ -238,6 +238,37 @@
         },
         {
             "type": "Label",
+            "name": "GoogleOAuthHint",
+            "caption": "Create a personal Google OAuth web client and register the redirect URI shown below.",
+            "visible": false
+        },
+        {
+            "type": "Label",
+            "name": "GoogleRedirectURI",
+            "caption": "Authorized redirect URI is unavailable.",
+            "visible": false
+        },
+        {
+            "type": "Button",
+            "name": "GoogleShowRedirectURI",
+            "caption": "Show redirect URI",
+            "visible": false,
+            "onClick": "echo IPSKALACC_GetGoogleRedirectURI($id);"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "GoogleClientID",
+            "caption": "Google OAuth client ID",
+            "visible": false
+        },
+        {
+            "type": "PasswordTextBox",
+            "name": "GoogleClientSecret",
+            "caption": "Google OAuth client secret",
+            "visible": false
+        },
+        {
+            "type": "Label",
             "name": "GoogleStatus",
             "caption": "Google account is not connected.",
             "visible": false
