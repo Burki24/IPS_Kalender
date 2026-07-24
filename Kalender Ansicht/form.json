@@ -134,6 +134,27 @@
                     "value": 2
                 }
             ]
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "IPSViewFontScale",
+                    "caption": "IPSView font size",
+                    "minimum": 80,
+                    "maximum": 200,
+                    "suffix": " %"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "IPSViewColorBarWidth",
+                    "caption": "IPSView color bar width",
+                    "minimum": 2,
+                    "maximum": 16,
+                    "suffix": " px"
+                }
+            ]
         }
     ],
     "actions": [

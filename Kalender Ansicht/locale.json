@@ -19,6 +19,8 @@
             "Provide IPSView HTMLBox": "IPSView-HTMLBox bereitstellen",
             "Transparent IPSView background": "Transparenter IPSView-Hintergrund",
             "IPSView contrast": "IPSView-Kontrast",
+            "IPSView font size": "IPSView-Schriftgröße",
+            "IPSView color bar width": "IPSView-Farbbalkenbreite",
             "Automatic": "Automatisch",
             "Light background": "Heller Hintergrund",
             "Dark background": "Dunkler Hintergrund",

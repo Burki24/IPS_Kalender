@@ -25,6 +25,8 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyBoolean('EnableIPSView', false);
         $this->RegisterPropertyBoolean('IPSViewTransparent', true);
         $this->RegisterPropertyInteger('IPSViewTheme', 0);
+        $this->RegisterPropertyInteger('IPSViewFontScale', 115);
+        $this->RegisterPropertyInteger('IPSViewColorBarWidth', 7);
 
         $this->SetVisualizationType(1);
     }
@@ -244,9 +246,17 @@ class KalenderAnsicht extends IPSModuleStrict
                 2       => 'ipsview-dark',
                 default => 'ipsview-auto'
             };
+            $fontScale = max(80, min(200, $this->ReadPropertyInteger('IPSViewFontScale')));
+            $colorBarWidth = max(2, min(16, $this->ReadPropertyInteger('IPSViewColorBarWidth')));
             $html = str_replace(
                 '<html lang="en">',
-                '<html lang="de" class="' . implode(' ', $classes) . '">',
+                sprintf(
+                    '<html lang="de" class="%s" style="--ipsview-font-scale: %d%%; --agenda-color-bar-width: %dpx; --compact-color-bar-width: %dpx;">',
+                    implode(' ', $classes),
+                    $fontScale,
+                    $colorBarWidth,
+                    $colorBarWidth
+                ),
                 $html
             );
             foreach ([
