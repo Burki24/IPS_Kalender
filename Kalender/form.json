@@ -127,7 +127,7 @@
         {
             "type": "Button",
             "caption": "Synchronize now",
-            "onClick": "if (IPSKAL_Synchronize($id)) { echo 'Synchronization successful.'; } else { $status = json_decode(IPSKAL_GetCalendarStatus($id), true); echo $status['lastError'] ?? 'Synchronization failed.'; }"
+            "onClick": "if (IPSKAL_Synchronize($id)) { echo IPS_Translate($id, 'Synchronization successful.'); } else { $status = json_decode(IPSKAL_GetCalendarStatus($id), true); echo $status['lastError'] ?? IPS_Translate($id, 'Synchronization failed.'); }"
         },
         {
             "type": "Button",

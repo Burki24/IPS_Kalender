@@ -41,9 +41,9 @@ class Kalender extends IPSModuleStrict
         $this->RegisterAttributeBoolean('DetectedCanWrite', false);
         $this->RegisterAttributeBoolean('RuntimeReady', false);
 
-        $this->RegisterVariableInteger('EventCount', 'Event count', '', 10);
-        $this->RegisterVariableInteger('LastSynchronization', 'Last synchronization', '~UnixTimestamp', 20);
-        $this->RegisterVariableString('Events', 'Events', '', 30);
+        $this->RegisterVariableInteger('EventCount', $this->Translate('Event count'), '', 10);
+        $this->RegisterVariableInteger('LastSynchronization', $this->Translate('Last synchronization'), '~UnixTimestamp', 20);
+        $this->RegisterVariableString('Events', $this->Translate('Events'), '', 30);
 
         $this->RegisterTimer('InitializationTimer', 0, 'IPSKAL_Initialize($_IPS[\'TARGET\']);');
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKAL_ScheduledSynchronize($_IPS[\'TARGET\']);');
@@ -509,34 +509,47 @@ class Kalender extends IPSModuleStrict
     private function validateConfiguration(): string
     {
         if (!SynchronizationSchedule::isValid($this->ReadPropertyInteger('UpdateSchedule'))) {
-            return 'The synchronization schedule is invalid.';
+            return $this->Translate('The synchronization schedule is invalid.');
         }
         if (trim($this->ReadPropertyString('CalendarID')) === ''
             && trim($this->ReadPropertyString('ProviderCalendarID')) === ''
             && !$this->HasActiveParent()) {
-            return 'The calendar ID is missing.';
+            return $this->Translate('The calendar ID is missing.');
         }
         return '';
     }
 
     private function handleError(Throwable $exception): string
     {
-        $message = trim(preg_replace('/\s+/', ' ', $exception->getMessage()) ?? '');
-        if ($message === '') {
-            $message = 'Unknown calendar error.';
+        $rawMessage = trim(preg_replace('/\s+/', ' ', $exception->getMessage()) ?? '');
+        if ($rawMessage === '') {
+            $rawMessage = 'Unknown calendar error.';
         }
-        $this->WriteAttributeString('LastError', $message);
-        $this->SendDebug('CalendarError', $message, 0);
 
-        if (str_contains(strtolower($message), 'changed by another client')) {
+        if (str_contains(strtolower($rawMessage), 'changed by another client')) {
             $this->SetStatus(self::STATUS_WRITE_CONFLICT);
-        } elseif ($exception instanceof JsonException || str_contains(strtolower($message), 'invalid data')) {
+        } elseif ($exception instanceof JsonException || str_contains(strtolower($rawMessage), 'invalid data')) {
             $this->SetStatus(self::STATUS_INVALID_RESPONSE);
         } else {
             $this->SetStatus(self::STATUS_SYNCHRONIZATION_FAILED);
         }
 
+        $message = $exception instanceof JsonException
+            ? $this->Translate('Invalid JSON data.')
+            : $this->translateErrorMessage($rawMessage);
+        $this->WriteAttributeString('LastError', $message);
+        $this->SendDebug('CalendarError', $rawMessage, 0);
+
         return $message;
+    }
+
+    private function translateErrorMessage(string $message): string
+    {
+        if (preg_match('/^The (.+) must be a JSON object\.$/', $message, $matches) === 1) {
+            return sprintf($this->Translate('The %s must be a JSON object.'), $matches[1]);
+        }
+
+        return $this->Translate($message);
     }
 
     private function encodeResult(bool $success, mixed $event = null, string $error = ''): string

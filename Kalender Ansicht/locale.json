@@ -1,5 +1,8 @@
 {
     "translations": {
+        "en": {
+            "Kalender Ansicht": "Calendar View"
+        },
         "de": {
             "Calendars": "Kalender",
             "Calendar instance": "Kalenderinstanz",
@@ -72,7 +75,15 @@
             "Recurring occurrences are currently read-only.": "Wiederkehrende Termine können derzeit nur gelesen werden.",
             "This calendar is read-only.": "Dieser Kalender ist schreibgeschützt.",
             "Editing events is only available in the Symcon tile.": "Termine können nur in der Symcon-Kachel bearbeitet werden.",
-            "Delete this event?": "Diesen Termin löschen?"
+            "Delete this event?": "Diesen Termin löschen?",
+            "The event data is invalid.": "Die Termindaten sind ungültig.",
+            "Event creation failed.": "Der Termin konnte nicht erstellt werden.",
+            "Event update failed.": "Der Termin konnte nicht geändert werden.",
+            "Event deletion failed.": "Der Termin konnte nicht gelöscht werden.",
+            "Unsupported visualization action: %s": "Nicht unterstützte Visualisierungsaktion: %s",
+            "The calendar selection is invalid.": "Die Kalenderauswahl ist ungültig.",
+            "The visualization request is invalid.": "Die Visualisierungsanfrage ist ungültig.",
+            "The selected calendar is not writable.": "Der ausgewählte Kalender ist schreibgeschützt."
         }
     }
 }

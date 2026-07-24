@@ -80,7 +80,7 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->SetTimerInterval('InitializationTimer', 0);
         $this->MaintainVariable(
             'IPSViewCalendar',
-            'IPSView calendar',
+            $this->Translate('IPSView calendar'),
             VARIABLETYPE_STRING,
             '~HTMLBox',
             10,
@@ -169,7 +169,7 @@ class KalenderAnsicht extends IPSModuleStrict
                     $instanceId = $this->requireWritableCalendar($request);
                     $event = $request['event'] ?? null;
                     if (!is_array($event)) {
-                        throw new InvalidArgumentException('The event data is invalid.');
+                        throw new InvalidArgumentException($this->Translate('The event data is invalid.'));
                     }
                     $result = json_decode(
                         IPSKAL_CreateEvent(
@@ -181,7 +181,7 @@ class KalenderAnsicht extends IPSModuleStrict
                         JSON_THROW_ON_ERROR
                     );
                     if (!is_array($result) || !($result['success'] ?? false)) {
-                        throw new RuntimeException((string) ($result['error'] ?? 'Event creation failed.'));
+                        throw new RuntimeException((string) ($result['error'] ?? $this->Translate('Event creation failed.')));
                     }
                     $this->sendToast('success', $this->Translate('Event created.'));
                     $this->broadcastState();
@@ -192,7 +192,7 @@ class KalenderAnsicht extends IPSModuleStrict
                     $instanceId = $this->requireWritableCalendar($request);
                     $event = $request['event'] ?? null;
                     if (!is_array($event)) {
-                        throw new InvalidArgumentException('The event data is invalid.');
+                        throw new InvalidArgumentException($this->Translate('The event data is invalid.'));
                     }
                     $result = json_decode(
                         IPSKAL_UpdateEvent(
@@ -204,7 +204,7 @@ class KalenderAnsicht extends IPSModuleStrict
                         JSON_THROW_ON_ERROR
                     );
                     if (!is_array($result) || !($result['success'] ?? false)) {
-                        throw new RuntimeException((string) ($result['error'] ?? 'Event update failed.'));
+                        throw new RuntimeException((string) ($result['error'] ?? $this->Translate('Event update failed.')));
                     }
                     $this->sendToast('success', $this->Translate('Event updated.'));
                     $this->broadcastState();
@@ -215,20 +215,20 @@ class KalenderAnsicht extends IPSModuleStrict
                     $instanceId = $this->requireWritableCalendar($request);
                     $event = $request['event'] ?? null;
                     if (!is_array($event)) {
-                        throw new InvalidArgumentException('The event data is invalid.');
+                        throw new InvalidArgumentException($this->Translate('The event data is invalid.'));
                     }
                     if (!IPSKAL_DeleteEvent(
                         $instanceId,
                         json_encode($event, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
                     )) {
-                        throw new RuntimeException('Event deletion failed.');
+                        throw new RuntimeException($this->Translate('Event deletion failed.'));
                     }
                     $this->sendToast('success', $this->Translate('Event deleted.'));
                     $this->broadcastState();
                     break;
 
                 default:
-                    throw new InvalidArgumentException('Unsupported visualization action: ' . $Ident);
+                    throw new InvalidArgumentException(sprintf($this->Translate('Unsupported visualization action: %s'), $Ident));
             }
         } catch (Throwable $exception) {
             $this->SendDebug('VisualizationAction', $exception->getMessage(), 0);
@@ -348,9 +348,10 @@ class KalenderAnsicht extends IPSModuleStrict
             };
             $fontScale = max(80, min(200, $this->ReadPropertyInteger('IPSViewFontScale')));
             $colorBarWidth = max(2, min(16, $this->ReadPropertyInteger('IPSViewColorBarWidth')));
+            $language = $this->Translate('Today') === 'Heute' ? 'de' : 'en';
             $html = str_replace(
                 '<html lang="en">',
-                '<html lang="de" class="' . implode(' ', $classes) . '">',
+                '<html lang="' . $language . '" class="' . implode(' ', $classes) . '">',
                 $html
             );
             $html = str_replace(
@@ -375,7 +376,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 'more', 'Create event', 'Event details', 'Calendar', 'Title', 'Start', 'End', 'Location',
                 'Description', 'Cancel', 'Save', 'Delete', 'Close', 'Tomorrow', 'Yesterday',
                 'Recurring occurrences are currently read-only.', 'This calendar is read-only.',
-                'Editing events is only available in the Symcon tile.'
+                'Editing events is only available in the Symcon tile.', 'Delete this event?'
             ] as $text) {
                 $translations[$text] = $this->Translate($text);
             }
@@ -578,7 +579,7 @@ class KalenderAnsicht extends IPSModuleStrict
     {
         $configuration = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($configuration)) {
-            throw new UnexpectedValueException('The calendar selection is invalid.');
+            throw new UnexpectedValueException($this->Translate('The calendar selection is invalid.'));
         }
 
         return array_values(array_filter($configuration, 'is_array'));
@@ -647,11 +648,11 @@ class KalenderAnsicht extends IPSModuleStrict
     private function decodeActionValue(mixed $value): array
     {
         if (!is_string($value)) {
-            throw new InvalidArgumentException('The visualization request is invalid.');
+            throw new InvalidArgumentException($this->Translate('The visualization request is invalid.'));
         }
         $request = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($request) || array_is_list($request)) {
-            throw new InvalidArgumentException('The visualization request is invalid.');
+            throw new InvalidArgumentException($this->Translate('The visualization request is invalid.'));
         }
         return $request;
     }
@@ -667,7 +668,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 return $instanceId;
             }
         }
-        throw new RuntimeException('The selected calendar is not writable.');
+        throw new RuntimeException($this->Translate('The selected calendar is not writable.'));
     }
 
     private function sendToast(string $level, string $message): void

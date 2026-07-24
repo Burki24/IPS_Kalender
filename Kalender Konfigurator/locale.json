@@ -1,5 +1,8 @@
 {
     "translations": {
+        "en": {
+            "Kalender Konfigurator": "Calendar Configurator"
+        },
         "de": {
             "Available calendars": "Verfügbare Kalender",
             "Calendar": "Kalender",
@@ -10,7 +13,11 @@
             "Not found": "Nicht gefunden",
             "Refresh calendars": "Kalender aktualisieren",
             "Calendar discovery failed": "Kalendersuche fehlgeschlagen",
-            "%d calendars found.": "%d Kalender gefunden."
+            "%d calendars found.": "%d Kalender gefunden.",
+            "The calendar account did not return a response.": "Das Kalenderkonto hat keine Antwort zurückgegeben.",
+            "The calendar account rejected the request.": "Das Kalenderkonto hat die Anfrage abgelehnt.",
+            "The calendar account returned invalid calendar data.": "Das Kalenderkonto hat ungültige Kalenderdaten zurückgegeben.",
+            "Unknown error.": "Unbekannter Fehler."
         }
     }
 }

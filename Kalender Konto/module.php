@@ -242,7 +242,7 @@ class KalenderKonto extends IPSModuleStrict
         try {
             return $this->googleOAuthRedirectUri();
         } catch (Throwable $exception) {
-            return $this->sanitizeError($exception->getMessage());
+            return $this->translateErrorMessage($exception->getMessage());
         }
     }
 
@@ -303,7 +303,7 @@ class KalenderKonto extends IPSModuleStrict
 
         if (!$this->isProviderImplemented($this->ReadPropertyInteger('Provider'))) {
             $this->SetTimerInterval('SynchronizationTimer', 0);
-            $this->WriteAttributeString('LastError', 'The selected provider is not implemented yet.');
+            $this->WriteAttributeString('LastError', $this->Translate('The selected provider is not implemented yet.'));
             $this->SetStatus(self::STATUS_PROVIDER_NOT_IMPLEMENTED);
             return;
         }
@@ -363,7 +363,9 @@ class KalenderKonto extends IPSModuleStrict
                 isset($operation) ? $operation : '',
                 isset($requestID) ? $requestID : '',
                 null,
-                $this->sanitizeError($exception->getMessage())
+                $exception instanceof JsonException
+                    ? $this->Translate('Invalid JSON data.')
+                    : $this->translateErrorMessage($exception->getMessage())
             );
         }
     }
@@ -382,7 +384,7 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         if (!$this->isProviderImplemented($this->ReadPropertyInteger('Provider'))) {
-            $message = 'The selected provider is not implemented yet.';
+            $message = $this->Translate('The selected provider is not implemented yet.');
             $this->WriteAttributeString('LastError', $message);
             $this->SetStatus(self::STATUS_PROVIDER_NOT_IMPLEMENTED);
 
@@ -395,6 +397,9 @@ class KalenderKonto extends IPSModuleStrict
         try {
             $provider = $this->createProvider();
             $result = $provider->testConnection();
+            if (isset($result['message']) && is_string($result['message'])) {
+                $result['message'] = $this->Translate($result['message']);
+            }
             $this->WriteAttributeString('LastError', '');
             $this->SetStatus($this->ReadPropertyBoolean('Active') ? IS_ACTIVE : IS_INACTIVE);
 
@@ -423,7 +428,7 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         if (!$this->isProviderImplemented($this->ReadPropertyInteger('Provider'))) {
-            $this->WriteAttributeString('LastError', 'The selected provider is not implemented yet.');
+            $this->WriteAttributeString('LastError', $this->Translate('The selected provider is not implemented yet.'));
             $this->SetStatus(self::STATUS_PROVIDER_NOT_IMPLEMENTED);
             return false;
         }
@@ -740,7 +745,7 @@ class KalenderKonto extends IPSModuleStrict
     {
         $provider = $this->ReadPropertyInteger('Provider');
         if (!SynchronizationSchedule::isValid($this->ReadPropertyInteger('UpdateSchedule'))) {
-            return 'The synchronization schedule is invalid.';
+            return $this->Translate('The synchronization schedule is invalid.');
         }
         if (!in_array($provider, [
             self::PROVIDER_APPLE,
@@ -749,26 +754,26 @@ class KalenderKonto extends IPSModuleStrict
             self::PROVIDER_MICROSOFT,
             self::PROVIDER_ICS
         ], true)) {
-            return 'Unknown calendar provider.';
+            return $this->Translate('Unknown calendar provider.');
         }
 
         if ($provider === self::PROVIDER_APPLE) {
             if (trim($this->ReadPropertyString('Username')) === '') {
-                return 'The Apple Account email address is missing.';
+                return $this->Translate('The Apple Account email address is missing.');
             }
             if ($this->ReadPropertyString('Password') === '') {
-                return 'The app-specific password is missing.';
+                return $this->Translate('The app-specific password is missing.');
             }
         }
 
         if ($provider === self::PROVIDER_CALDAV && trim($this->ReadPropertyString('ServerURL')) === '') {
-            return 'The CalDAV server URL is missing.';
+            return $this->Translate('The CalDAV server URL is missing.');
         }
 
         if ($provider === self::PROVIDER_ICS) {
             $subscriptions = $this->iCalendarSubscriptions();
             if ($subscriptions === []) {
-                return 'At least one active iCalendar subscription is required.';
+                return $this->Translate('At least one active iCalendar subscription is required.');
             }
             $subscriptionUrls = [];
             foreach ($subscriptions as $subscription) {
@@ -776,14 +781,14 @@ class KalenderKonto extends IPSModuleStrict
                 if (filter_var($url, FILTER_VALIDATE_URL) === false
                     || !in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https', 'webcal'], true)) {
                     return sprintf(
-                        'The iCalendar URL for subscription "%s" is invalid.',
+                        $this->Translate('The iCalendar URL for subscription "%s" is invalid.'),
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
                 $urlKey = $this->iCalendarUrlKey($url);
                 if (isset($subscriptionUrls[$urlKey])) {
                     return sprintf(
-                        'The iCalendar URL for subscription "%s" is configured more than once.',
+                        $this->Translate('The iCalendar URL for subscription "%s" is configured more than once.'),
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
@@ -791,13 +796,13 @@ class KalenderKonto extends IPSModuleStrict
                 $color = strtoupper(trim((string) ($subscription['color'] ?? '')));
                 if ($color !== '' && preg_match('/^#[0-9A-F]{6}$/', $color) !== 1) {
                     return sprintf(
-                        'The color for iCalendar subscription "%s" is invalid.',
+                        $this->Translate('The color for iCalendar subscription "%s" is invalid.'),
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
                 if (!SynchronizationSchedule::isValid((int) ($subscription['updateSchedule'] ?? -1))) {
                     return sprintf(
-                        'The synchronization schedule for iCalendar subscription "%s" is invalid.',
+                        $this->Translate('The synchronization schedule for iCalendar subscription "%s" is invalid.'),
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
@@ -805,7 +810,7 @@ class KalenderKonto extends IPSModuleStrict
                     (int) ($subscription['translationProfile'] ?? -1)
                 )) {
                     return sprintf(
-                        'The title translation profile for iCalendar subscription "%s" is invalid.',
+                        $this->Translate('The title translation profile for iCalendar subscription "%s" is invalid.'),
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
@@ -814,13 +819,13 @@ class KalenderKonto extends IPSModuleStrict
 
         if ($provider === self::PROVIDER_GOOGLE) {
             if (trim($this->ReadPropertyString('GoogleClientID')) === '') {
-                return 'The Google OAuth client ID is missing.';
+                return $this->Translate('The Google OAuth client ID is missing.');
             }
             if ($this->ReadPropertyString('GoogleClientSecret') === '') {
-                return 'The Google OAuth client secret is missing.';
+                return $this->Translate('The Google OAuth client secret is missing.');
             }
             if (!$this->isGoogleConnected()) {
-                return 'Google Calendar is not connected yet.';
+                return $this->Translate('Google Calendar is not connected yet.');
             }
         }
 
@@ -838,26 +843,24 @@ class KalenderKonto extends IPSModuleStrict
 
     private function getProviderName(int $provider): string
     {
-        return match ($provider) {
+        return $this->Translate(match ($provider) {
             self::PROVIDER_APPLE     => 'Apple iCloud',
             self::PROVIDER_CALDAV    => 'CalDAV',
             self::PROVIDER_GOOGLE    => 'Google Calendar',
             self::PROVIDER_MICROSOFT => 'Microsoft 365',
             self::PROVIDER_ICS       => 'ICS/Webcal',
             default                  => 'Unknown'
-        };
+        });
     }
 
     private function handleProviderError(Throwable $exception): string
     {
-        $message = $this->sanitizeError($exception->getMessage());
-        $this->WriteAttributeString('LastError', $message);
-        $this->SendDebug('ProviderError', $message, 0);
+        $rawMessage = $this->sanitizeError($exception->getMessage());
 
         if ($exception instanceof CalDAVProviderException) {
             if (in_array($exception->httpStatus, [401, 403], true)) {
                 $this->SetStatus(self::STATUS_AUTHENTICATION_FAILED);
-            } elseif (str_contains(strtolower($message), 'xml')) {
+            } elseif (str_contains(strtolower($rawMessage), 'xml')) {
                 $this->SetStatus(self::STATUS_INVALID_RESPONSE);
             } else {
                 $this->SetStatus(self::STATUS_CONNECTION_FAILED);
@@ -877,6 +880,12 @@ class KalenderKonto extends IPSModuleStrict
         } else {
             $this->SetStatus(self::STATUS_CONNECTION_FAILED);
         }
+
+        $message = $exception instanceof JsonException
+            ? $this->Translate('Invalid JSON data.')
+            : $this->translateErrorMessage($rawMessage);
+        $this->WriteAttributeString('LastError', $message);
+        $this->SendDebug('ProviderError', $rawMessage, 0);
 
         return $message;
     }
@@ -924,7 +933,7 @@ class KalenderKonto extends IPSModuleStrict
             header('Content-Type: text/html; charset=utf-8');
             header('Cache-Control: no-store');
             echo htmlspecialchars(
-                $this->Translate('Google Calendar could not be connected') . ': ' . $this->Translate($message),
+                $this->Translate('Google Calendar could not be connected') . ': ' . $message,
                 ENT_QUOTES | ENT_SUBSTITUTE,
                 'UTF-8'
             );
@@ -1013,7 +1022,7 @@ class KalenderKonto extends IPSModuleStrict
             );
         } catch (Throwable $exception) {
             return $this->Translate('Authorized redirect URI is unavailable') . ': '
-                . $this->Translate($this->sanitizeError($exception->getMessage()));
+                . $this->translateErrorMessage($exception->getMessage());
         }
     }
 
@@ -1055,6 +1064,58 @@ class KalenderKonto extends IPSModuleStrict
         return $account !== ''
             ? sprintf($this->Translate('Connected with %s.'), $account)
             : $this->Translate('Google account is connected.');
+    }
+
+    private function translateErrorMessage(string $message): string
+    {
+        $message = $this->sanitizeError($message);
+        if ($message === '') {
+            return '';
+        }
+
+        if (preg_match('/^Unsupported operation: (.+)$/', $message, $matches) === 1) {
+            return sprintf($this->Translate('Unsupported operation: %s'), $matches[1]);
+        }
+        if (preg_match('/^Unexpected CalDAV response during (.+): HTTP (\d+)\.$/', $message, $matches) === 1) {
+            return sprintf(
+                $this->Translate('Unexpected CalDAV response during %s: HTTP %d.'),
+                $this->Translate($matches[1]),
+                (int) $matches[2]
+            );
+        }
+
+        $patterns = [
+            '/^HTTP request failed \((\d+)\): (.+)$/' => ['HTTP request failed (%d): %s', [1, 2]],
+            '/^Unexpected CalDAV response: HTTP (\d+)\.$/' => ['Unexpected CalDAV response: HTTP %d.', [1]],
+            '/^Google Calendar request failed with HTTP (\d+)\.$/' => ['Google Calendar request failed with HTTP %d.', [1]],
+            '/^The calendar feed returned HTTP status (\d+)\.$/' => ['The calendar feed returned HTTP status %d.', [1]],
+            '/^The calendar contains an invalid date value: (.+)$/' => ['The calendar contains an invalid date value: %s', [1]],
+            '/^The iCalendar subscription URL for "(.+)" is configured more than once\.$/' => ['The iCalendar subscription URL for "%s" is configured more than once.', [1]],
+            '/^The configured color for iCalendar subscription "(.+)" is invalid\.$/' => ['The configured color for iCalendar subscription "%s" is invalid.', [1]],
+            '/^The synchronization schedule for iCalendar subscription "(.+)" is invalid\.$/' => ['The synchronization schedule for iCalendar subscription "%s" is invalid.', [1]],
+            '/^The title translation profile for iCalendar subscription "(.+)" is invalid\.$/' => ['The title translation profile for iCalendar subscription "%s" is invalid.', [1]],
+            '/^The iCalendar URL for subscription "(.+)" is invalid\.$/' => ['The iCalendar URL for subscription "%s" is invalid.', [1]],
+            '/^The iCalendar URL for subscription "(.+)" is configured more than once\.$/' => ['The iCalendar URL for subscription "%s" is configured more than once.', [1]],
+            '/^The color for iCalendar subscription "(.+)" is invalid\.$/' => ['The color for iCalendar subscription "%s" is invalid.', [1]],
+        ];
+
+        foreach ($patterns as $pattern => [$template, $groups]) {
+            if (preg_match($pattern, $message, $matches) !== 1) {
+                continue;
+            }
+            $values = array_map(static fn(int $group): string => $matches[$group], $groups);
+            return sprintf($this->Translate($template), ...$values);
+        }
+
+        if (str_starts_with($message, 'The calendar feed could not be refreshed: ')) {
+            $detail = substr($message, strlen('The calendar feed could not be refreshed: '));
+            return sprintf(
+                $this->Translate('The calendar feed could not be refreshed: %s'),
+                $this->translateErrorMessage($detail)
+            );
+        }
+
+        return $this->Translate($message);
     }
 
     private function sanitizeError(string $message): string
@@ -1316,7 +1377,7 @@ class KalenderKonto extends IPSModuleStrict
                 'lastDownload' => (int) ($entry['lastDownload'] ?? 0),
                 'lastChange'   => (int) ($entry['lastChange'] ?? 0),
                 'stale'        => (bool) ($entry['stale'] ?? false),
-                'lastError'    => $this->sanitizeError((string) ($entry['lastError'] ?? ''))
+                'lastError'    => $this->translateErrorMessage((string) ($entry['lastError'] ?? ''))
             ];
         }
 

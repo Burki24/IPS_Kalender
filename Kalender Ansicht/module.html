@@ -582,10 +582,16 @@
             button.classList.toggle('active', button.dataset.view === activeView);
             button.textContent = t(viewLabels[button.dataset.view] || button.dataset.view);
         });
-        document.getElementById('previous-button').title = t('Previous');
-        document.getElementById('today-button').title = t('Today');
-        document.getElementById('next-button').title = t('Next');
-        document.getElementById('refresh-button').title = t('Refresh');
+        [
+            ['previous-button', 'Previous'],
+            ['today-button', 'Today'],
+            ['next-button', 'Next'],
+            ['refresh-button', 'Refresh']
+        ].forEach(([id, text]) => {
+            const button = document.getElementById(id);
+            button.title = t(text);
+            button.setAttribute('aria-label', t(text));
+        });
 
         if (activeView === 'month') {
             periodTitle.textContent = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(cursorDate);
@@ -994,10 +1000,16 @@
             ['cancel-button', 'Cancel'],
             ['save-button', 'Save']
         ].forEach(([id, text]) => { document.getElementById(id).textContent = t(text); });
+        document.getElementById('all-day-label').textContent = t('All day');
+        document.getElementById('dialog-title').textContent = t('Event');
         [
             ['dialog-close', 'Close'],
             ['add-button', 'Create event']
-        ].forEach(([id, text]) => { document.getElementById(id).title = t(text); });
+        ].forEach(([id, text]) => {
+            const button = document.getElementById(id);
+            button.title = t(text);
+            button.setAttribute('aria-label', t(text));
+        });
     }
 
     function showToast(message, level) {

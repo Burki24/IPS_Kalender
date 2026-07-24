@@ -237,6 +237,6 @@ class KalenderKonfigurator extends IPSModuleStrict
     private function sanitizeError(string $message): string
     {
         $message = trim(preg_replace('/\s+/', ' ', $message) ?? '');
-        return $message !== '' ? $message : 'Unknown error.';
+        return $this->Translate($message !== '' ? $message : 'Unknown error.');
     }
 }

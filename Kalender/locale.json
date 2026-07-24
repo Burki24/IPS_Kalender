@@ -1,5 +1,8 @@
 {
     "translations": {
+        "en": {
+            "Kalender": "Calendar"
+        },
         "de": {
             "Active": "Aktiv",
             "Synchronization schedule": "Aktualisierungsplan",
@@ -35,7 +38,21 @@
             "Event write conflict": "Terminkonflikt beim Schreiben",
             "Event count": "Anzahl Termine",
             "Last synchronization": "Letzte Synchronisation",
-            "Events": "Termine"
+            "Events": "Termine",
+            "The synchronization schedule is invalid.": "Der Aktualisierungsplan ist ungültig.",
+            "The calendar ID is missing.": "Die Kalender-ID fehlt.",
+            "The event changes are invalid.": "Die Terminänderungen sind ungültig.",
+            "No event changes were supplied.": "Es wurden keine Terminänderungen übergeben.",
+            "The calendar account did not confirm the deletion.": "Das Kalenderkonto hat das Löschen nicht bestätigt.",
+            "The calendar instance is still initializing.": "Die Kalenderinstanz wird noch initialisiert.",
+            "No active calendar account is connected.": "Es ist kein aktives Kalenderkonto verbunden.",
+            "The calendar account did not return a response.": "Das Kalenderkonto hat keine Antwort zurückgegeben.",
+            "The calendar account rejected the request.": "Das Kalenderkonto hat die Anfrage abgelehnt.",
+            "The calendar account returned invalid data.": "Das Kalenderkonto hat ungültige Daten zurückgegeben.",
+            "The %s must be a JSON object.": "%s muss ein JSON-Objekt sein.",
+            "Unknown calendar error.": "Unbekannter Kalenderfehler.",
+            "Invalid JSON data.": "Ungültige JSON-Daten.",
+            "The event was changed by another client. Synchronize the calendar and try again.": "Der Termin wurde von einem anderen Client geändert. Synchronisieren Sie den Kalender und versuchen Sie es erneut."
         }
     }
 }

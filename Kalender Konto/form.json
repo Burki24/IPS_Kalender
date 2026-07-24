@@ -286,7 +286,7 @@
             "caption": "Disconnect Google account",
             "visible": false,
             "confirm": "Do you really want to disconnect the Google account?",
-            "onClick": "echo IPSKALACC_DisconnectGoogle($id) ? 'Google account disconnected.' : 'Could not disconnect Google account.';"
+            "onClick": "echo IPSKALACC_DisconnectGoogle($id) ? IPS_Translate($id, 'Google account disconnected.') : IPS_Translate($id, 'Could not disconnect Google account.');"
         },
         {
             "type": "Select",
@@ -375,7 +375,7 @@
         {
             "type": "Button",
             "caption": "Synchronize now",
-            "onClick": "echo IPSKALACC_Synchronize($id) ? 'Synchronization successful.' : 'Synchronization failed.';"
+            "onClick": "echo IPSKALACC_Synchronize($id) ? IPS_Translate($id, 'Synchronization successful.') : IPS_Translate($id, 'Synchronization failed.');"
         },
         {
             "type": "Button",
@@ -386,7 +386,7 @@
             "type": "Button",
             "caption": "Clear cache",
             "confirm": "Do you really want to clear all cached calendars and feed data?",
-            "onClick": "IPSKALACC_ClearCache($id); echo 'Cache cleared.';"
+            "onClick": "IPSKALACC_ClearCache($id); echo IPS_Translate($id, 'Cache cleared.');"
         }
     ],
     "status": [
