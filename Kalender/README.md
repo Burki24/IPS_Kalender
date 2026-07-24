@@ -1,6 +1,16 @@
 # Kalender
 
-Das Modul repräsentiert einen einzelnen Online-Kalender. Es wird normalerweise über den **Kalender Konfigurator** erstellt und mit dem zugehörigen **Kalender Konto** verbunden.
+Das Modul repräsentiert einen einzelnen Online-Kalender.
+
+> **Kalender-Instanzen nicht manuell anlegen oder lediglich über „Gateway
+> ändern“ mit einem Konto verbinden.** Sie sollen über den zum Konto gehörenden
+> **Kalender Konfigurator** erstellt werden. Nur der Konfigurator trägt den
+> tatsächlichen Kalendernamen, die interne Identität, die Farbe, die
+> Schreibrechte und die korrekte Kontoverbindung vollständig ein. Das ist
+> besonders bei Konten mit mehreren Kalendern erforderlich.
+
+Nach der Erstellung durch den Konfigurator darf die Instanz im Objektbaum
+beliebig verschoben oder vom Benutzer umbenannt werden.
 
 ## Funktionsumfang
 

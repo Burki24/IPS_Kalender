@@ -1,67 +1,49 @@
 # Kalender Konfigurator
-Beschreibung des Moduls.
 
-### Inhaltsverzeichnis
+Der Kalender Konfigurator zeigt die Kalender eines bestimmten **Kalender
+Kontos** an und erstellt daraus vollständig konfigurierte
+**Kalender-Instanzen**.
 
-1. [Funktionsumfang](#1-funktionsumfang)
-2. [Voraussetzungen](#2-voraussetzungen)
-3. [Software-Installation](#3-software-installation)
-4. [Einrichten der Instanzen in Symcon](#4-einrichten-der-instanzen-in-symcon)
-5. [Statusvariablen und Profile](#5-statusvariablen-und-profile)
-6. [WebFront](#6-webfront)
-7. [PHP-Befehlsreferenz](#7-php-befehlsreferenz)
+## Funktionsumfang
 
-### 1. Funktionsumfang
+- lädt die vom verbundenen Kalender Konto gefundenen Kalender
+- zeigt Kalendername, Farbe, Zugriffsart und vorhandene Instanz an
+- erstellt ausgewählte oder alle noch nicht angelegten Kalender
+- übernimmt Kalender-ID, Anbieter-ID, Farbe und Schreibrechte
+- verbindet jede erzeugte Kalender-Instanz mit dem richtigen Konto
+- erkennt bereits für dieses Konto angelegte Kalender-Instanzen
 
-*
+## Einrichtung
 
-### 2. Voraussetzungen
+1. Zuerst das gewünschte **Kalender Konto** anlegen und vollständig
+   konfigurieren.
+2. Das Konto über **Jetzt synchronisieren** aktualisieren.
+3. Den mit diesem Konto verbundenen **Kalender Konfigurator** öffnen.
+4. In der Liste einen oder mehrere Kalender auswählen.
+5. **Erstellen** beziehungsweise **Alle erstellen** verwenden.
 
-- Symcon ab Version 7.1
+> **Kalender-Instanzen sollen immer aus dieser Liste erstellt werden.**
+> Manuell angelegte, kopierte oder nur über **Gateway ändern** verbundene
+> Instanzen erhalten weder den richtigen Kalendernamen noch die vollständige
+> Kalenderidentität. Bei einem Konto mit mehreren Kalendern ist anschließend
+> keine eindeutige Zuordnung möglich.
 
-### 3. Software-Installation
+Die erzeugten Instanzen können nach der Erstellung im Objektbaum verschoben
+oder umbenannt werden. Ihre technische Zuordnung zum Konto bleibt dabei
+erhalten.
 
-* Über den Module Store das 'Kalender Konfigurator'-Modul installieren.
-* Alternativ über das Module Control folgende URL hinzufügen
+## Kontobezogene Arbeitsweise
 
-### 4. Einrichten der Instanzen in Symcon
+Ein Konfigurator gehört immer genau zu dem Kalender Konto, mit dem er über den
+Datenfluss verbunden ist. Er zeigt deshalb bewusst nur Kalender dieses Kontos
+an. Für ein weiteres Apple-, Google-, Microsoft-, CalDAV- oder
+ICS/Webcal-Konto wird ein eigener kontobezogener Konfigurator verwendet.
 
- Unter 'Instanz hinzufügen' kann das 'Kalender Konfigurator'-Modul mithilfe des Schnellfilters gefunden werden.  
-	- Weitere Informationen zum Hinzufügen von Instanzen in der [Dokumentation der Instanzen](https://www.symcon.de/service/dokumentation/konzepte/instanzen/#Instanz_hinzufügen)
+Diese Trennung verhindert, dass Kalender verschiedener Zugangsdaten oder
+Anbieter versehentlich mit dem falschen Konto verbunden werden.
 
-__Konfigurationsseite__:
+## Voraussetzungen
 
-Name     | Beschreibung
--------- | ------------------
-         |
-         |
-
-### 5. Statusvariablen und Profile
-
-Die Statusvariablen/Kategorien werden automatisch angelegt. Das Löschen einzelner kann zu Fehlfunktionen führen.
-
-#### Statusvariablen
-
-Name   | Typ     | Beschreibung
------- | ------- | ------------
-       |         |
-       |         |
-
-#### Profile
-
-Name   | Typ
------- | -------
-       |
-       |
-
-### 6. Visualisierung
-
-Die Funktionalität, die das Modul in der Visualisierung bietet.
-
-### 7. PHP-Befehlsreferenz
-
-`boolean IPSKALCFG_BeispielFunktion(integer $InstanzID);`
-Erklärung der Funktion.
-
-Beispiel:
-`IPSKALCFG_BeispielFunktion(12345);`
+- Symcon ab Version 8.1
+- ein eingerichtetes und aktives **Kalender Konto**
+- eine erfolgreiche Kontosynchronisation
