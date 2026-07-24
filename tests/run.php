@@ -752,6 +752,35 @@ assertSameValue(
     'Manual synchronization must never be triggered by the scheduler.'
 );
 
+$libraryMetadata = json_decode(
+    file_get_contents(__DIR__ . '/../library.json'),
+    true,
+    512,
+    JSON_THROW_ON_ERROR
+);
+assertSameValue(
+    'OpenCalendar',
+    $libraryMetadata['name'] ?? null,
+    'The visible library name must remain independent of protected Symcon product names.'
+);
+foreach ([
+    'Kalender Konto',
+    'Kalender Konfigurator',
+    'Kalender',
+    'Kalender Ansicht'
+] as $moduleDirectory) {
+    $moduleMetadata = json_decode(
+        file_get_contents(__DIR__ . '/../' . $moduleDirectory . '/module.json'),
+        true,
+        512,
+        JSON_THROW_ON_ERROR
+    );
+    assertTrueValue(
+        filter_var($moduleMetadata['url'] ?? '', FILTER_VALIDATE_URL) !== false,
+        sprintf('The module "%s" must link to its documentation.', $moduleDirectory)
+    );
+}
+
 $calendarModuleSource = file_get_contents(__DIR__ . '/../Kalender/module.php');
 $accountModuleSource = file_get_contents(__DIR__ . '/../Kalender Konto/module.php');
 $viewModuleSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.php');
@@ -798,4 +827,4 @@ assertTrueValue(
     'Agenda, three-day and weekly headings must optionally show the day of year.'
 );
 
-echo "All IPS_Kalender tests passed.\n";
+echo "All OpenCalendar tests passed.\n";

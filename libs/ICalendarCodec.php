@@ -116,7 +116,7 @@ final class ICalendarCodec
         $lines = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
-            'PRODID:-//IPS_Kalender//Calendar Module//EN',
+            'PRODID:-//OpenCalendar//Calendar Module//EN',
             'CALSCALE:GREGORIAN',
             'BEGIN:VEVENT',
             'UID:' . $uid,

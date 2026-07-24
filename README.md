@@ -1,4 +1,4 @@
-# IPS_Kalender
+# OpenCalendar
 
 ## Wichtiger Hinweis zur Einrichtung
 
@@ -70,7 +70,7 @@ und die Einrichtung der
 sowie das
 [Ablaufverhalten von Aktualisierungstoken](https://developers.google.com/identity/protocols/oauth2#expiration).
 
-Folgende Module beinhaltet das IPS_Kalender Repository:
+Folgende Module beinhaltet das Repository:
 
 - __Kalender Konto__ ([Dokumentation](Kalender%20Konto))  
 	Verbindet Apple-iCloud-, Google-Calendar- und CalDAV-Konten, bündelt mehrere iCalendar-Abonnements in einem Konto, hält eine geprüfte Feed-Rückfallebene vor, löst wiederkehrende Feed-Termine lokal auf und stellt die Kalender bereit.

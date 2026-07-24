@@ -74,7 +74,7 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
             CURLOPT_SSL_VERIFYHOST  => $this->verifyTLS ? 2 : 0,
             CURLOPT_HTTPHEADER      => $headerLines,
             CURLOPT_ENCODING        => '',
-            CURLOPT_USERAGENT       => 'IPS_Kalender/1.0',
+            CURLOPT_USERAGENT       => 'OpenCalendar/1.0',
             CURLOPT_HEADERFUNCTION  => static function ($curl, string $line) use (&$responseHeaders): int {
                 $length = strlen($line);
                 $trimmedLine = trim($line);
