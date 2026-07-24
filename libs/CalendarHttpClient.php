@@ -117,13 +117,11 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
         if ($responseBody === false) {
             $message = curl_error($handle);
             $errorCode = curl_errno($handle);
-            curl_close($handle);
             throw new CalendarHttpException(sprintf('HTTP request failed (%d): %s', $errorCode, $message));
         }
 
         $statusCode = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
         $effectiveUrl = (string) curl_getinfo($handle, CURLINFO_EFFECTIVE_URL);
-        curl_close($handle);
 
         return new CalendarHttpResponse($statusCode, $responseHeaders, (string) $responseBody, $effectiveUrl);
     }
