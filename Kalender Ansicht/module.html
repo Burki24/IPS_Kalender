@@ -277,6 +277,7 @@
         .week-column { min-width: 0; min-height: 180px; padding: 7px; border: 1px solid var(--cal-border); border-radius: var(--cal-radius); background: var(--cal-surface); }
         .week-column.today { border-color: var(--cal-accent); }
         .week-heading { margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--cal-border); font-size: .74em; font-weight: 650; text-align: center; }
+        .week-events { min-width: 0; }
         .week-event { margin: 4px 0; padding: 6px; overflow: hidden; border-left: var(--compact-color-bar-width) solid var(--event-color); border-radius: 6px; background: color-mix(in srgb, var(--event-color) 15%, transparent); cursor: pointer; font-size: .68em; }
         .week-event strong {
             display: -webkit-box;
@@ -288,6 +289,33 @@
             -webkit-line-clamp: 2;
         }
         .week-event span { display: block; overflow-wrap: anywhere; color: var(--cal-muted); line-height: 1.25; }
+        .week-grid.vertical-week-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .week-grid.vertical-week-grid .week-column {
+            display: grid;
+            grid-template-columns: minmax(105px, 15%) minmax(0, 1fr);
+            min-height: 0;
+            gap: 10px;
+        }
+        .week-grid.vertical-week-grid .week-heading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 52px;
+            margin: 0;
+            padding: 7px 10px 7px 3px;
+            border-right: 1px solid var(--cal-border);
+            border-bottom: 0;
+            text-align: center;
+        }
+        .week-grid.vertical-week-grid .week-events {
+            display: grid;
+            align-content: center;
+            grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
+            gap: 6px;
+        }
+        .week-grid.vertical-week-grid .week-event { margin: 0; }
 
         .floating-add {
             position: absolute;
@@ -394,6 +422,13 @@
             .toolbar-title { font-size: .82em; }
             .event-card { grid-template-columns: var(--agenda-color-bar-width) 54px 1fr; gap: 7px; }
             .form-row.two { grid-template-columns: 1fr; }
+            .week-grid.vertical-week-grid .week-column { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+            .week-grid.vertical-week-grid .week-heading {
+                min-height: 0;
+                padding: 4px 6px 6px;
+                border-right: 0;
+                border-bottom: 1px solid var(--cal-border);
+            }
         }
 
         @media (max-width: 800px) {
@@ -402,7 +437,9 @@
             .week-grid.three-day-grid {
                 grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
             }
+            .week-grid.vertical-week-grid { grid-template-columns: minmax(0, 1fr); }
             .week-column { min-height: 145px; }
+            .week-grid.vertical-week-grid .week-column { min-height: 0; }
         }
 
         @media (max-height: 260px) {
@@ -628,7 +665,14 @@
         const weekStart = startOfWeek(cursorDate);
         const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
             .filter(day => calendarState.settings.showWeekends !== false || !isWeekend(day));
-        renderDayColumns(days, 'week-grid' + (calendarState.settings.showWeekends === false ? ' hide-weekends' : ''));
+        const vertical = document.documentElement.classList.contains('ipsview-mode')
+            && calendarState.settings.ipsViewWeekOrientation === 'vertical';
+        renderDayColumns(
+            days,
+            'week-grid'
+                + (calendarState.settings.showWeekends === false ? ' hide-weekends' : '')
+                + (vertical ? ' vertical-week-grid' : '')
+        );
     }
 
     function renderThreeDays() {
@@ -642,6 +686,7 @@
             const heading = element('div', 'week-heading');
             heading.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: '2-digit' }).format(day);
             column.appendChild(heading);
+            const eventList = element('div', 'week-events');
             const dayEnd = addDays(day, 1);
             const events = calendarState.events.filter(event => eventOverlaps(event, day, dayEnd));
             events.forEach(event => {
@@ -655,8 +700,9 @@
                 const time = document.createElement('span');
                 time.textContent = event.allDay ? t('All day') : formatTime(eventStart(event));
                 item.append(title, time);
-                column.appendChild(item);
+                eventList.appendChild(item);
             });
+            column.appendChild(eventList);
             grid.appendChild(column);
         });
         content.appendChild(grid);

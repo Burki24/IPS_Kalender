@@ -27,6 +27,7 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyInteger('IPSViewTheme', 0);
         $this->RegisterPropertyInteger('IPSViewFontScale', 115);
         $this->RegisterPropertyInteger('IPSViewColorBarWidth', 7);
+        $this->RegisterPropertyInteger('IPSViewWeekOrientation', 0);
 
         $this->SetVisualizationType(1);
     }
@@ -359,7 +360,10 @@ class KalenderAnsicht extends IPSModuleStrict
                 'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),
                 'showCalendarName' => $this->ReadPropertyBoolean('ShowCalendarName'),
                 'showLocation'     => $this->ReadPropertyBoolean('ShowLocation'),
-                'showDescription'  => $this->ReadPropertyBoolean('ShowDescription')
+                'showDescription'  => $this->ReadPropertyBoolean('ShowDescription'),
+                'ipsViewWeekOrientation' => $this->ReadPropertyInteger('IPSViewWeekOrientation') === 1
+                    ? 'vertical'
+                    : 'horizontal'
             ]
         ];
     }

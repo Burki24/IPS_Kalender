@@ -136,6 +136,21 @@
             ]
         },
         {
+            "type": "Select",
+            "name": "IPSViewWeekOrientation",
+            "caption": "IPSView week orientation",
+            "options": [
+                {
+                    "caption": "Horizontal",
+                    "value": 0
+                },
+                {
+                    "caption": "Vertical",
+                    "value": 1
+                }
+            ]
+        },
+        {
             "type": "RowLayout",
             "items": [
                 {

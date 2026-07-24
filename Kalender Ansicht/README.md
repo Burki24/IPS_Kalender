@@ -35,11 +35,12 @@ Wiederkehrende, vom CalDAV-Server expandierte Einzeltermine werden derzeit nur l
 1. In der Instanz **Kalender Ansicht** die Option **IPSView-HTMLBox bereitstellen** aktivieren und die Änderungen übernehmen.
 2. Mit **Transparenter IPSView-Hintergrund** festlegen, ob die Oberfläche der umgebenden View sichtbar bleiben soll.
 3. Unter **IPSView-Kontrast** die Darstellung an den Hintergrund anpassen. **Heller Hintergrund** erzeugt dunkle Schrift, **Dunkler Hintergrund** helle Schrift. **Automatisch** übernimmt das Farbschema des Endgeräts.
-4. Mit **IPSView-Schriftgröße** die gesamte Darstellung zwischen 80 und 200 Prozent skalieren. Der Standardwert 115 Prozent verbessert die Lesbarkeit auf Touchdisplays.
-5. Über **IPSView-Farbbalkenbreite** die Kalenderkennzeichnung zwischen 2 und 16 Pixeln einstellen. Der Standardwert beträgt 7 Pixel.
-6. Unterhalb der Instanz wird die String-Variable **IPSView-Kalender** mit dem Profil `~HTMLBox` angelegt.
-7. Im IPSView Designer ein Steuerelement vom Typ **HTML-Box** einfügen und diese Variable als ID auswählen.
-8. Als HTML Renderer **Browser des Clients** oder **Automatisch** verwenden. Der native einfache HTML Renderer reicht nicht aus, weil Ansichtswechsel und Navigation JavaScript verwenden.
+4. Mit **IPSView-Wochenausrichtung** festlegen, ob die Wochentage nebeneinander oder als vertikale Tageszeilen dargestellt werden.
+5. Mit **IPSView-Schriftgröße** die gesamte Darstellung zwischen 80 und 200 Prozent skalieren. Der Standardwert 115 Prozent verbessert die Lesbarkeit auf Touchdisplays.
+6. Über **IPSView-Farbbalkenbreite** die Kalenderkennzeichnung zwischen 2 und 16 Pixeln einstellen. Der Standardwert beträgt 7 Pixel.
+7. Unterhalb der Instanz wird die String-Variable **IPSView-Kalender** mit dem Profil `~HTMLBox` angelegt.
+8. Im IPSView Designer ein Steuerelement vom Typ **HTML-Box** einfügen und diese Variable als ID auswählen.
+9. Als HTML Renderer **Browser des Clients** oder **Automatisch** verwenden. Der native einfache HTML Renderer reicht nicht aus, weil Ansichtswechsel und Navigation JavaScript verwenden.
 
 Agenda, 3-Tage-, Wochen- und Monatsansicht sowie die Navigation funktionieren direkt innerhalb der IPSView-HTMLBox. Die Variable wird bei Änderungen oder Synchronisationen der ausgewählten Kalender automatisch neu erzeugt. Das Öffnen von Termindetails ist lesend möglich. Erstellen, Bearbeiten, Löschen und die manuelle Synchronisationsschaltfläche bleiben der Symcon-Kachel vorbehalten, da die IPSView-HTMLBox keine Symcon-HTML-SDK-Aktionsbrücke bereitstellt.
 
