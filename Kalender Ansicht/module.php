@@ -10,8 +10,6 @@ class KalenderAnsicht extends IPSModuleStrict
     private const STATUS_NO_CALENDARS = 201;
     private const STATUS_INVALID_CONFIGURATION = 202;
 
-    private bool $runtimeReady = false;
-
     public function Create(): void
     {
         parent::Create();
@@ -33,6 +31,7 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyInteger('IPSViewFontScale', 115);
         $this->RegisterPropertyInteger('IPSViewColorBarWidth', 7);
         $this->RegisterPropertyInteger('IPSViewWeekOrientation', 0);
+        $this->RegisterAttributeBoolean('RuntimeReady', false);
 
         $this->SetVisualizationType(1);
         $this->RegisterTimer('InitializationTimer', 0, 'IPSKALVIEW_Initialize($_IPS[\'TARGET\']);');
@@ -42,7 +41,7 @@ class KalenderAnsicht extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
-        $this->runtimeReady = false;
+        $this->WriteAttributeBoolean('RuntimeReady', false);
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->SetTimerInterval('InitializationTimer', 0);
         $this->MaintainVariable(
@@ -77,7 +76,7 @@ class KalenderAnsicht extends IPSModuleStrict
             }
         }
 
-        $this->runtimeReady = true;
+        $this->WriteAttributeBoolean('RuntimeReady', true);
         try {
             $calendars = $this->getSelectedCalendars();
             foreach ($calendars as $calendar) {
@@ -106,7 +105,7 @@ class KalenderAnsicht extends IPSModuleStrict
             $this->scheduleInitialization();
             return;
         }
-        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+        if (!$this->isRuntimeReady()) {
             return;
         }
 
@@ -229,7 +228,7 @@ class KalenderAnsicht extends IPSModuleStrict
 
     private function broadcastState(): void
     {
-        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+        if (!$this->isRuntimeReady()) {
             return;
         }
 
@@ -345,7 +344,7 @@ class KalenderAnsicht extends IPSModuleStrict
      */
     private function buildState(): array
     {
-        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+        if (!$this->isRuntimeReady()) {
             return $this->emptyState();
         }
 
@@ -442,6 +441,12 @@ class KalenderAnsicht extends IPSModuleStrict
         if (IPS_GetKernelRunlevel() === KR_READY) {
             $this->SetTimerInterval('InitializationTimer', self::INITIALIZATION_DELAY_MS);
         }
+    }
+
+    private function isRuntimeReady(): bool
+    {
+        return IPS_GetKernelRunlevel() === KR_READY
+            && $this->ReadAttributeBoolean('RuntimeReady');
     }
 
     /**

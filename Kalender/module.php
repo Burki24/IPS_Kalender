@@ -16,8 +16,6 @@ class Kalender extends IPSModuleStrict
     private const STATUS_INVALID_RESPONSE = 203;
     private const STATUS_WRITE_CONFLICT = 204;
 
-    private bool $runtimeReady = false;
-
     public function Create(): void
     {
         parent::Create();
@@ -40,6 +38,7 @@ class Kalender extends IPSModuleStrict
         $this->RegisterAttributeBoolean('CalendarMetadataAvailable', false);
         $this->RegisterAttributeString('DetectedCalendarColor', '');
         $this->RegisterAttributeBoolean('DetectedCanWrite', false);
+        $this->RegisterAttributeBoolean('RuntimeReady', false);
 
         $this->RegisterVariableInteger('EventCount', 'Event count', '', 10);
         $this->RegisterVariableInteger('LastSynchronization', 'Last synchronization', '~UnixTimestamp', 20);
@@ -85,7 +84,7 @@ class Kalender extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
-        $this->runtimeReady = false;
+        $this->WriteAttributeBoolean('RuntimeReady', false);
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->SetTimerInterval('InitializationTimer', 0);
         $this->SetTimerInterval('SynchronizationTimer', 0);
@@ -125,7 +124,7 @@ class Kalender extends IPSModuleStrict
             return false;
         }
 
-        $this->runtimeReady = true;
+        $this->WriteAttributeBoolean('RuntimeReady', true);
         $this->SetTimerInterval(
             'SynchronizationTimer',
             SynchronizationSchedule::timerInterval(
@@ -270,7 +269,7 @@ class Kalender extends IPSModuleStrict
 
     public function GetCalendarStatus(): string
     {
-        if ($this->runtimeReady && IPS_GetKernelRunlevel() === KR_READY) {
+        if ($this->isRuntimeReady()) {
             $this->refreshCalendarMetadataSafely();
         }
         $metadataAvailable = $this->ReadAttributeBoolean('CalendarMetadataAvailable');
@@ -376,7 +375,7 @@ class Kalender extends IPSModuleStrict
      */
     private function sendRequest(string $operation, array $additionalData = []): array
     {
-        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+        if (!$this->isRuntimeReady()) {
             throw new RuntimeException('The calendar instance is still initializing.');
         }
         if (!$this->HasActiveParent()) {
@@ -418,6 +417,12 @@ class Kalender extends IPSModuleStrict
         if (IPS_GetKernelRunlevel() === KR_READY && $this->ReadPropertyBoolean('Active')) {
             $this->SetTimerInterval('InitializationTimer', self::INITIALIZATION_DELAY_MS);
         }
+    }
+
+    private function isRuntimeReady(): bool
+    {
+        return IPS_GetKernelRunlevel() === KR_READY
+            && $this->ReadAttributeBoolean('RuntimeReady');
     }
 
     /**
