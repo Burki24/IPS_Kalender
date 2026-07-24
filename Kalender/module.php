@@ -274,11 +274,13 @@ class Kalender extends IPSModuleStrict
         $calendarId = $this->ReadPropertyString('CalendarID');
         $providerCalendarId = $this->ReadPropertyString('ProviderCalendarID');
         $calendarUrl = $this->ReadPropertyString('CalendarURL');
+        $availableCalendars = [];
 
         foreach ($calendars as $calendar) {
             if (!is_array($calendar)) {
                 continue;
             }
+            $availableCalendars[] = $calendar;
             $matches = ($calendarId !== '' && (string) ($calendar['id'] ?? '') === $calendarId)
                 || ($providerCalendarId !== '' && (string) ($calendar['providerId'] ?? '') === $providerCalendarId)
                 || ($calendarUrl !== '' && (string) ($calendar['url'] ?? '') === $calendarUrl);
@@ -286,19 +288,32 @@ class Kalender extends IPSModuleStrict
                 continue;
             }
 
-            $capabilities = is_array($calendar['capabilities'] ?? null) ? $calendar['capabilities'] : [];
-            $canWrite = (bool) ($capabilities['create'] ?? false)
-                || (bool) ($capabilities['update'] ?? false)
-                || (bool) ($capabilities['delete'] ?? false);
-            $this->WriteAttributeString('DetectedCalendarColor', trim((string) ($calendar['color'] ?? '')));
-            $this->WriteAttributeBoolean('DetectedCanWrite', $canWrite);
-            $this->WriteAttributeBoolean('CalendarMetadataAvailable', true);
+            $this->storeCalendarMetadata($calendar);
             return;
         }
 
-        if ($calendars !== []) {
+        if (count($availableCalendars) === 1) {
+            $this->storeCalendarMetadata($availableCalendars[0]);
+            return;
+        }
+
+        if ($availableCalendars !== []) {
             $this->WriteAttributeBoolean('CalendarMetadataAvailable', false);
         }
+    }
+
+    /**
+     * @param array<string, mixed> $calendar
+     */
+    private function storeCalendarMetadata(array $calendar): void
+    {
+        $capabilities = is_array($calendar['capabilities'] ?? null) ? $calendar['capabilities'] : [];
+        $canWrite = (bool) ($capabilities['create'] ?? false)
+            || (bool) ($capabilities['update'] ?? false)
+            || (bool) ($capabilities['delete'] ?? false);
+        $this->WriteAttributeString('DetectedCalendarColor', trim((string) ($calendar['color'] ?? '')));
+        $this->WriteAttributeBoolean('DetectedCanWrite', $canWrite);
+        $this->WriteAttributeBoolean('CalendarMetadataAvailable', true);
     }
 
     /**

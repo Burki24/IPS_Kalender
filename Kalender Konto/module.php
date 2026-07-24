@@ -536,15 +536,55 @@ class KalenderKonto extends IPSModuleStrict
                 return $calendar;
             }
         }
+        $fallback = $this->singleCalendarFallback($calendars);
+        if ($fallback !== null) {
+            return $fallback;
+        }
 
-        foreach ($this->discoverCalendars() as $calendar) {
+        $calendars = $this->discoverCalendars();
+        foreach ($calendars as $calendar) {
             if ((string) ($calendar['id'] ?? '') === $calendarId
                 && $this->calendarReference($calendar) !== '') {
                 return $calendar;
             }
         }
+        $fallback = $this->singleCalendarFallback($calendars);
+        if ($fallback !== null) {
+            return $fallback;
+        }
 
         throw new RuntimeException('The selected calendar is no longer available in this account.');
+    }
+
+    /**
+     * A single-feed ICS/Webcal account always exposes exactly one calendar.
+     * Keep an existing child usable when its gateway or the feed URL changes
+     * and its URL-derived calendar ID therefore no longer matches.
+     *
+     * @param array<mixed> $calendars
+     * @return array<string, mixed>|null
+     */
+    private function singleCalendarFallback(array $calendars): ?array
+    {
+        if ($this->ReadPropertyInteger('Provider') !== self::PROVIDER_ICS) {
+            return null;
+        }
+
+        $available = array_values(array_filter(
+            $calendars,
+            fn(mixed $calendar): bool => is_array($calendar) && $this->calendarReference($calendar) !== ''
+        ));
+        if (count($available) !== 1) {
+            return null;
+        }
+
+        $this->SendDebug(
+            'CalendarResolution',
+            'Using the only calendar exposed by the ICS/Webcal account because the stored calendar ID no longer matches.',
+            0
+        );
+
+        return $available[0];
     }
 
     private function createProvider(): CalendarProviderInterface
