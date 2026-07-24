@@ -6,7 +6,9 @@ namespace IPSKalender;
 
 use InvalidArgumentException;
 
-final class CalDAVOriginPolicy
+require_once __DIR__ . '/CalendarHttpOriginPolicyInterface.php';
+
+final class CalDAVOriginPolicy implements CalendarHttpOriginPolicyInterface
 {
     private const ICLOUD_CALDAV_HOST = 'caldav.icloud.com';
 
@@ -95,6 +97,24 @@ final class CalDAVOriginPolicy
             && $scheme === 'https'
             && $port === 443
             && self::isICloudCalDAVHost($host);
+    }
+
+    /** @inheritDoc */
+    public function requestBlockedMessage(): string
+    {
+        return 'The CalDAV request URL belongs to an untrusted origin.';
+    }
+
+    /** @inheritDoc */
+    public function redirectInvalidMessage(): string
+    {
+        return 'The CalDAV redirect URL is invalid.';
+    }
+
+    /** @inheritDoc */
+    public function redirectBlockedMessage(): string
+    {
+        return 'A CalDAV redirect to an untrusted origin was blocked.';
     }
 
     /**

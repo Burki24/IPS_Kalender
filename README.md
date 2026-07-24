@@ -70,10 +70,50 @@ und die Einrichtung der
 sowie das
 [Ablaufverhalten von Aktualisierungstoken](https://developers.google.com/identity/protocols/oauth2#expiration).
 
+## Microsoft 365 / Outlook.com verbinden
+
+Die Microsoft-Anbindung ist für Anwender bewusst ohne eigene App-Registrierung
+aufgebaut. Voraussetzung ist lediglich eine aktive **Symcon-Connect-Verbindung**.
+Im **Kalender Konto** wird als Anbieter **Microsoft 365** gewählt und anschließend
+**Microsoft-Konto verbinden** aufgerufen. Die Anmeldung und Zustimmung erfolgen
+direkt bei Microsoft; Client-ID und Clientschlüssel werden dem Anwender nicht
+angezeigt und müssen nicht in Symcon hinterlegt werden.
+
+OpenCalendar fordert ausschließlich delegierten Kalenderzugriff an. Unterstützt
+werden Microsoft-365-Geschäfts-/Schulkonten sowie persönliche Microsoft-Konten
+wie Outlook.com. Das Modul kann die eigenen Kalender auflisten und – entsprechend
+den von Microsoft gemeldeten Kalenderrechten – Termine lesen, erstellen, ändern
+und löschen. Mail, Kontakte, OneDrive und Teams-APIs werden nicht angefordert.
+
+Der benutzerspezifische Refresh-Token wird als internes Attribut der
+Kalender-Konto-Instanz gespeichert; kurzlebige Access-Tokens werden nur im
+Instanzpuffer gehalten.
+
+### Einmalige Freischaltung für Modulautoren
+
+Für die Veröffentlichung muss der gemeinsame OAuth-Client einmalig außerhalb
+des Repositorys eingerichtet werden. Diese Einrichtung ist **nicht** von jedem
+Anwender durchzuführen:
+
+1. In Microsoft Entra eine Web-App registrieren, die Konten aus beliebigen
+   Organisationsverzeichnissen sowie persönliche Microsoft-Konten akzeptiert.
+2. Als Redirect-URI
+   `https://oauth.ipmagic.de/forward/opencalendar_microsoft` hinterlegen.
+3. Delegiert `Calendars.ReadWrite` sowie den OAuth-Scope `offline_access`
+   freigeben.
+4. Einen Client-Schlüssel erzeugen und den OAuth-Client unter dem Identifier
+   `opencalendar_microsoft` beim Symcon-OAuth-Dienst registrieren lassen. Dabei
+   Client-ID, Client-Schlüssel, Microsoft-Autorisierungs-/Token-Endpunkte und
+   die benötigten Scopes an Symcon übermitteln.
+
+Client-Schlüssel oder andere zentrale App-Zugangsdaten gehören **nicht** in das
+Repository. Erst nach dieser einmaligen serverseitigen Registrierung kann der
+Microsoft-Login produktiv durchlaufen.
+
 Folgende Module beinhaltet das Repository:
 
 - __Kalender Konto__ ([Dokumentation](Kalender%20Konto))  
-	Verbindet Apple-iCloud-, Google-Calendar- und CalDAV-Konten, bündelt mehrere iCalendar-Abonnements in einem Konto, hält eine geprüfte Feed-Rückfallebene vor, löst wiederkehrende Feed-Termine lokal auf und stellt die Kalender bereit.
+	Verbindet Apple-iCloud-, Google-Calendar-, Microsoft-365-/Outlook.com- und CalDAV-Konten, bündelt mehrere iCalendar-Abonnements in einem Konto, hält eine geprüfte Feed-Rückfallebene vor, löst wiederkehrende Feed-Termine lokal auf und stellt die Kalender bereit.
 
 - __Kalender Konfigurator__ ([Dokumentation](Kalender%20Konfigurator))  
 	Findet Kalender eines Kontos und legt Kalenderinstanzen an.

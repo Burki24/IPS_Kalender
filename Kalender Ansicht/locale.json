@@ -84,7 +84,8 @@
             "The calendar selection is invalid.": "Die Kalenderauswahl ist ungültig.",
             "The visualization request is invalid.": "Die Visualisierungsanfrage ist ungültig.",
             "The selected calendar is not writable.": "Der ausgewählte Kalender ist schreibgeschützt.",
-            "Synchronization failed. Please check the instance status for details.": "Synchronisation fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details."
+            "Synchronization failed. Please check the instance status for details.": "Synchronisation fehlgeschlagen. Bitte prüfen Sie den Instanzstatus für weitere Details.",
+            "The description of Microsoft online meetings is protected and cannot be edited here.": "Die Beschreibung von Microsoft-Onlinebesprechungen ist geschützt und kann hier nicht bearbeitet werden."
         }
     }
 }

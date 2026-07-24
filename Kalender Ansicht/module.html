@@ -826,7 +826,8 @@
         setDateInputs(eventStart(event), eventEnd(event), Boolean(event.allDay));
         const editable = hasActionBridge()
             && Boolean(event.canWrite) && !event.recurring && !event.recurrenceId;
-        setDialogEditable(editable);
+        const descriptionEditable = editable && !Boolean(event.onlineMeeting);
+        setDialogEditable(editable, descriptionEditable);
         document.getElementById('delete-button').classList.toggle('hidden', !editable);
         const note = document.getElementById('dialog-note');
         if (!editable) {
@@ -835,6 +836,9 @@
                 : (event.recurring || event.recurrenceId
                     ? t('Recurring occurrences are currently read-only.')
                     : t('This calendar is read-only.'));
+            note.classList.remove('hidden');
+        } else if (!descriptionEditable) {
+            note.textContent = t('The description of Microsoft online meetings is protected and cannot be edited here.');
             note.classList.remove('hidden');
         } else {
             note.classList.add('hidden');
@@ -856,10 +860,11 @@
         select.disabled = false;
     }
 
-    function setDialogEditable(editable) {
-        ['event-summary', 'event-all-day', 'event-start', 'event-end', 'event-location', 'event-description'].forEach(id => {
+    function setDialogEditable(editable, descriptionEditable = editable) {
+        ['event-summary', 'event-all-day', 'event-start', 'event-end', 'event-location'].forEach(id => {
             document.getElementById(id).disabled = !editable;
         });
+        document.getElementById('event-description').disabled = !descriptionEditable;
         document.getElementById('save-button').classList.toggle('hidden', !editable);
     }
 
@@ -891,6 +896,7 @@
             end: inputDateValue(document.getElementById('event-end').value, allDay)
         };
         if (!eventData.summary || !eventData.start || !eventData.end) return;
+        if (selectedEvent?.onlineMeeting) delete eventData.description;
 
         if (selectedEvent) {
             sendAction('UpdateEvent', {

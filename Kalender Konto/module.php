@@ -14,6 +14,10 @@ use IPSKalender\GoogleOAuthException;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\ICalendarSubscriptionProvider;
+use IPSKalender\MicrosoftCalendarProvider;
+use IPSKalender\MicrosoftCalendarProviderException;
+use IPSKalender\MicrosoftGraphOriginPolicy;
+use IPSKalender\MicrosoftOAuthException;
 use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
@@ -25,14 +29,20 @@ require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/GoogleOAuthClient.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
+require_once __DIR__ . '/../libs/MicrosoftCalendarProvider.php';
+require_once __DIR__ . '/../libs/MicrosoftOAuthClient.php';
+require_once __DIR__ . '/../libs/MicrosoftGraphOriginPolicy.php';
+require_once __DIR__ . '/../libs/SymconOAuthOriginPolicy.php';
 require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 require_once __DIR__ . '/traits/GoogleOAuthTrait.php';
+require_once __DIR__ . '/traits/MicrosoftOAuthTrait.php';
 require_once __DIR__ . '/traits/ICalendarAccountTrait.php';
 require_once __DIR__ . '/traits/ChildGatewayTrait.php';
 
 class KalenderKonto extends IPSModuleStrict
 {
     use KalenderKontoGoogleOAuthTrait;
+    use KalenderKontoMicrosoftOAuthTrait;
     use KalenderKontoICalendarAccountTrait;
     use KalenderKontoChildGatewayTrait;
 
@@ -41,6 +51,7 @@ class KalenderKonto extends IPSModuleStrict
     private const CONNECT_CONTROL_MODULE_ID = '{9486D575-BE8C-4ED8-B5B5-20930E26DE6F}';
     private const GOOGLE_OAUTH_HOOK_PREFIX = 'ips-kalender-google-';
     private const GOOGLE_OAUTH_STATE_TTL = 900;
+    private const MICROSOFT_OAUTH_IDENTIFIER = 'opencalendar_microsoft';
 
     private const PROVIDER_APPLE = 0;
     private const PROVIDER_CALDAV = 1;
@@ -84,9 +95,12 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterAttributeString('GoogleAccount', '');
         $this->RegisterAttributeString('GoogleTokenClientID', '');
         $this->RegisterAttributeString('GoogleOAuthState', '');
+        $this->RegisterAttributeString('MicrosoftRefreshToken', '');
+        $this->RegisterAttributeString('MicrosoftAccount', '');
 
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_ScheduledSynchronize($_IPS[\'TARGET\']);');
         $this->RegisterHook($this->googleOAuthHookAddress());
+        $this->RegisterOAuth(self::MICROSOFT_OAUTH_IDENTIFIER);
     }
 
     /**
@@ -105,6 +119,7 @@ class KalenderKonto extends IPSModuleStrict
         $provider = $this->ReadPropertyInteger('Provider');
         $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
         $isGoogle = $provider === self::PROVIDER_GOOGLE;
+        $isMicrosoft = $provider === self::PROVIDER_MICROSOFT;
         $isIcs = $provider === self::PROVIDER_ICS;
 
         foreach ($form['elements'] as &$element) {
@@ -151,6 +166,21 @@ class KalenderKonto extends IPSModuleStrict
                 } elseif ($name === 'GoogleDisconnect') {
                     $element['visible'] = $isGoogle && $this->isGoogleConnected();
                 }
+            } elseif (in_array($name, [
+                'MicrosoftOAuthHint',
+                'MicrosoftConnectHint',
+                'MicrosoftStatus',
+                'MicrosoftConnect',
+                'MicrosoftDisconnect'
+            ], true)) {
+                $element['visible'] = $isMicrosoft;
+                if ($name === 'MicrosoftStatus') {
+                    $element['caption'] = $this->microsoftStatusText();
+                } elseif ($name === 'MicrosoftConnect') {
+                    $element['visible'] = $isMicrosoft && !$this->isMicrosoftConnected();
+                } elseif ($name === 'MicrosoftDisconnect') {
+                    $element['visible'] = $isMicrosoft && $this->isMicrosoftConnected();
+                }
             }
         }
         unset($element);
@@ -168,6 +198,7 @@ class KalenderKonto extends IPSModuleStrict
     {
         $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
         $isGoogle = $provider === self::PROVIDER_GOOGLE;
+        $isMicrosoft = $provider === self::PROVIDER_MICROSOFT;
         $isIcs = $provider === self::PROVIDER_ICS;
         $this->UpdateFormField('ServerURL', 'visible', $isPasswordProvider);
         $this->UpdateFormField('ServerURL', 'caption', $isIcs ? $this->Translate('iCalendar URL') : $this->Translate('Server URL'));
@@ -196,6 +227,12 @@ class KalenderKonto extends IPSModuleStrict
         $this->UpdateFormField('GoogleClientSecret', 'visible', $isGoogle);
         $this->UpdateFormField('GoogleConnect', 'visible', $isGoogle && !$this->isGoogleConnected());
         $this->UpdateFormField('GoogleDisconnect', 'visible', $isGoogle && $this->isGoogleConnected());
+        $this->UpdateFormField('MicrosoftOAuthHint', 'visible', $isMicrosoft);
+        $this->UpdateFormField('MicrosoftConnectHint', 'visible', $isMicrosoft);
+        $this->UpdateFormField('MicrosoftStatus', 'visible', $isMicrosoft);
+        $this->UpdateFormField('MicrosoftStatus', 'caption', $this->microsoftStatusText());
+        $this->UpdateFormField('MicrosoftConnect', 'visible', $isMicrosoft && !$this->isMicrosoftConnected());
+        $this->UpdateFormField('MicrosoftDisconnect', 'visible', $isMicrosoft && $this->isMicrosoftConnected());
 
         if ($provider === self::PROVIDER_APPLE) {
             $this->UpdateFormField('ServerURL', 'value', self::APPLE_CALDAV_URL);
@@ -279,6 +316,10 @@ class KalenderKonto extends IPSModuleStrict
                 $this->UpdateFormField('GoogleRedirectUnavailablePopup', 'visible', true);
                 break;
 
+            case 'FormMicrosoftAuthorizationFailed':
+                $this->UpdateFormField('MicrosoftAuthorizationFailedPopup', 'visible', true);
+                break;
+
             default:
                 throw new InvalidArgumentException('Unsupported form action: ' . $Ident);
         }
@@ -293,8 +334,9 @@ class KalenderKonto extends IPSModuleStrict
 
         $providerName = $this->getProviderName($this->ReadPropertyInteger('Provider'));
         $username = match ($this->ReadPropertyInteger('Provider')) {
-            self::PROVIDER_GOOGLE => trim($this->ReadAttributeString('GoogleAccount')),
-            self::PROVIDER_ICS    => $this->iCalendarSummary(),
+            self::PROVIDER_GOOGLE    => trim($this->ReadAttributeString('GoogleAccount')),
+            self::PROVIDER_MICROSOFT => trim($this->ReadAttributeString('MicrosoftAccount')),
+            self::PROVIDER_ICS       => $this->iCalendarSummary(),
             default               => trim($this->ReadPropertyString('Username'))
         };
         $this->SetSummary($username !== '' ? $providerName . ' – ' . $username : $providerName);
@@ -463,13 +505,17 @@ class KalenderKonto extends IPSModuleStrict
         return json_encode(
             [
                 'provider'            => $this->getProviderName($this->ReadPropertyInteger('Provider')),
-                'connected'           => $this->ReadPropertyInteger('Provider') !== self::PROVIDER_GOOGLE
-                    || $this->isGoogleConnected(),
-                'account'             => $this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE
-                    ? $this->ReadAttributeString('GoogleAccount')
-                    : ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS
-                        ? $this->iCalendarSummary()
-                        : trim($this->ReadPropertyString('Username'))),
+                'connected'           => match ($this->ReadPropertyInteger('Provider')) {
+                    self::PROVIDER_GOOGLE    => $this->isGoogleConnected(),
+                    self::PROVIDER_MICROSOFT => $this->isMicrosoftConnected(),
+                    default                  => true
+                },
+                'account'             => match ($this->ReadPropertyInteger('Provider')) {
+                    self::PROVIDER_GOOGLE    => $this->ReadAttributeString('GoogleAccount'),
+                    self::PROVIDER_MICROSOFT => $this->ReadAttributeString('MicrosoftAccount'),
+                    self::PROVIDER_ICS       => $this->iCalendarSummary(),
+                    default                  => trim($this->ReadPropertyString('Username'))
+                },
                 'lastSynchronization' => $this->ReadAttributeInteger('LastSynchronization'),
                 'lastError'           => $this->ReadAttributeString('LastError'),
                 'subscriptionCache'   => $this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS
@@ -524,6 +570,22 @@ class KalenderKonto extends IPSModuleStrict
                 }
             }
         }
+        if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_MICROSOFT) {
+            $account = '';
+            foreach ($calendars as $calendar) {
+                $owner = trim((string) ($calendar['owner'] ?? ''));
+                if ($owner !== '' && ((bool) ($calendar['primary'] ?? false) || $account === '')) {
+                    $account = $owner;
+                }
+                if ($owner !== '' && (bool) ($calendar['primary'] ?? false)) {
+                    break;
+                }
+            }
+            $this->WriteAttributeString('MicrosoftAccount', $account);
+            if ($account !== '') {
+                $this->SetSummary($this->getProviderName(self::PROVIDER_MICROSOFT) . ' – ' . $account);
+            }
+        }
         $this->WriteAttributeString(
             'CachedCalendars',
             json_encode(
@@ -553,6 +615,19 @@ class KalenderKonto extends IPSModuleStrict
             return new GoogleCalendarProvider(
                 $this->createUnauthenticatedHttpClient(),
                 $this->getGoogleAccessToken()
+            );
+        }
+
+        if ($provider === self::PROVIDER_MICROSOFT) {
+            return new MicrosoftCalendarProvider(
+                new CalendarHttpClient(
+                    max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
+                    $this->ReadPropertyBoolean('VerifyTLS'),
+                    '',
+                    '',
+                    new MicrosoftGraphOriginPolicy()
+                ),
+                $this->getMicrosoftAccessToken()
             );
         }
 
@@ -686,6 +761,10 @@ class KalenderKonto extends IPSModuleStrict
             }
         }
 
+        if ($provider === self::PROVIDER_MICROSOFT && !$this->isMicrosoftConnected()) {
+            return $this->Translate('Microsoft 365 is not connected yet.');
+        }
+
         return '';
     }
 
@@ -693,7 +772,13 @@ class KalenderKonto extends IPSModuleStrict
     {
         return in_array(
             $provider,
-            [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_GOOGLE, self::PROVIDER_ICS],
+            [
+                self::PROVIDER_APPLE,
+                self::PROVIDER_CALDAV,
+                self::PROVIDER_GOOGLE,
+                self::PROVIDER_MICROSOFT,
+                self::PROVIDER_ICS
+            ],
             true
         );
     }
@@ -726,11 +811,15 @@ class KalenderKonto extends IPSModuleStrict
             $this->SetStatus($exception->httpStatus === 401
                 ? self::STATUS_AUTHENTICATION_FAILED
                 : self::STATUS_CONNECTION_FAILED);
+        } elseif ($exception instanceof MicrosoftCalendarProviderException) {
+            $this->SetStatus(in_array($exception->httpStatus, [401, 403], true)
+                ? self::STATUS_AUTHENTICATION_FAILED
+                : self::STATUS_CONNECTION_FAILED);
         } elseif ($exception instanceof ICalendarFeedProviderException) {
             $this->SetStatus(in_array($exception->httpStatus, [401, 403], true)
                 ? self::STATUS_AUTHENTICATION_FAILED
                 : self::STATUS_CONNECTION_FAILED);
-        } elseif ($exception instanceof GoogleOAuthException) {
+        } elseif ($exception instanceof GoogleOAuthException || $exception instanceof MicrosoftOAuthException) {
             $this->SetStatus(self::STATUS_AUTHENTICATION_FAILED);
         } elseif ($exception instanceof JsonException) {
             $this->SetStatus(self::STATUS_INVALID_RESPONSE);
@@ -777,6 +866,7 @@ class KalenderKonto extends IPSModuleStrict
             '/^HTTP request failed \((\d+)\): (.+)$/' => ['HTTP request failed (%d): %s', [1, 2]],
             '/^Unexpected CalDAV response: HTTP (\d+)\.$/' => ['Unexpected CalDAV response: HTTP %d.', [1]],
             '/^Google Calendar request failed with HTTP (\d+)\.$/' => ['Google Calendar request failed with HTTP %d.', [1]],
+            '/^Microsoft Calendar request failed with HTTP (\d+)\.$/' => ['Microsoft Calendar request failed with HTTP %d.', [1]],
             '/^The calendar feed returned HTTP status (\d+)\.$/' => ['The calendar feed returned HTTP status %d.', [1]],
             '/^The calendar contains an invalid date value: (.+)$/' => ['The calendar contains an invalid date value: %s', [1]],
             '/^The iCalendar subscription URL for "(.+)" is configured more than once\.$/' => ['The iCalendar subscription URL for "%s" is configured more than once.', [1]],
@@ -815,7 +905,8 @@ class KalenderKonto extends IPSModuleStrict
         }
         foreach ([
             $this->ReadPropertyString('GoogleClientSecret'),
-            $this->ReadAttributeString('GoogleRefreshToken')
+            $this->ReadAttributeString('GoogleRefreshToken'),
+            $this->ReadAttributeString('MicrosoftRefreshToken')
         ] as $secret) {
             if ($secret !== '') {
                 $message = str_replace($secret, '***', $message);

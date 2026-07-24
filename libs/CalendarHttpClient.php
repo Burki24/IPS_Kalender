@@ -6,7 +6,7 @@ namespace IPSKalender;
 
 use RuntimeException;
 
-require_once __DIR__ . '/CalDAVOriginPolicy.php';
+require_once __DIR__ . '/CalendarHttpOriginPolicyInterface.php';
 
 final class CalendarHttpResponse
 {
@@ -49,19 +49,19 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
      * @param bool                    $verifyTLS    Whether TLS certificates and hostnames must be verified.
      * @param string                  $username     Optional HTTP authentication username.
      * @param string                  $password     Optional HTTP authentication password.
-     * @param CalDAVOriginPolicy|null $originPolicy Optional CalDAV trust policy used for guarded redirects.
+     * @param CalendarHttpOriginPolicyInterface|null $originPolicy Optional trust policy used for guarded redirects.
      */
     public function __construct(
         private readonly int $timeout,
         private readonly bool $verifyTLS,
         private readonly string $username = '',
         private readonly string $password = '',
-        private readonly ?CalDAVOriginPolicy $originPolicy = null
+        private readonly ?CalendarHttpOriginPolicyInterface $originPolicy = null
     ) {
     }
 
     /**
-     * Executes an HTTP request while enforcing the configured CalDAV redirect policy when present.
+     * Executes an HTTP request while enforcing the configured origin policy when present.
      *
      * @param array<string, string> $headers Request headers keyed by header name.
      */
@@ -72,7 +72,7 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
         }
 
         if (!$this->originPolicy->isAllowedUrl($url)) {
-            throw new CalendarHttpException('The CalDAV request URL belongs to an untrusted origin.');
+            throw new CalendarHttpException($this->originPolicy->requestBlockedMessage());
         }
 
         $currentUrl = $url;
@@ -96,11 +96,11 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
                     $location
                 );
             } catch (\InvalidArgumentException $exception) {
-                throw new CalendarHttpException('The CalDAV redirect URL is invalid.', 0, $exception);
+                throw new CalendarHttpException($this->originPolicy->redirectInvalidMessage(), 0, $exception);
             }
 
             if (!$this->originPolicy->isAllowedUrl($redirectUrl)) {
-                throw new CalendarHttpException('A CalDAV redirect to an untrusted origin was blocked.');
+                throw new CalendarHttpException($this->originPolicy->redirectBlockedMessage());
             }
 
             $currentUrl = $redirectUrl;

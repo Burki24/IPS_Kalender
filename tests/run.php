@@ -7,6 +7,11 @@ use IPSKalender\CalendarHttpResponse;
 use IPSKalender\CalendarEventTranslation;
 use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\GoogleOAuthClient;
+use IPSKalender\MicrosoftCalendarProvider;
+use IPSKalender\MicrosoftCalendarProviderException;
+use IPSKalender\MicrosoftGraphOriginPolicy;
+use IPSKalender\MicrosoftOAuthClient;
+use IPSKalender\SymconOAuthOriginPolicy;
 use IPSKalender\ICalendarCodec;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
@@ -15,6 +20,10 @@ use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/GoogleOAuthClient.php';
+require_once __DIR__ . '/../libs/MicrosoftCalendarProvider.php';
+require_once __DIR__ . '/../libs/MicrosoftGraphOriginPolicy.php';
+require_once __DIR__ . '/../libs/MicrosoftOAuthClient.php';
+require_once __DIR__ . '/../libs/SymconOAuthOriginPolicy.php';
 require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
@@ -252,6 +261,263 @@ $refreshBody = [];
 parse_str($personalOAuthHttpClient->requests[1]['body'], $refreshBody);
 assertSameValue('refresh_token', $refreshBody['grant_type'], 'Token renewal must use the refresh-token grant.');
 assertSameValue('personal-refresh-token', $refreshBody['refresh_token'], 'Token renewal must send the stored refresh token.');
+
+
+$msCalendarClient = new FakeHttpClient([
+    response(200, [
+        'value' => [
+            [
+                'id'                => 'AQMk-primary',
+                'name'              => 'Calendar',
+                'hexColor'          => '#0078D4',
+                'canEdit'           => true,
+                'isDefaultCalendar' => true,
+                'changeKey'         => 'ck-primary',
+                'owner'             => ['name' => 'Max', 'address' => 'max@example.com']
+            ],
+            [
+                'id'      => 'AQMk-readonly',
+                'name'    => 'Shared',
+                'canEdit' => false,
+                'owner'   => ['address' => 'other@example.com']
+            ]
+        ],
+        '@odata.nextLink' => 'https://graph.microsoft.com/v1.0/me/calendars?$skiptoken=abc'
+    ]),
+    response(200, [
+        'value' => [[
+            'id'      => 'AQMk-secondary',
+            'name'    => 'Projects',
+            'canEdit' => true,
+            'owner'   => ['address' => 'max@example.com']
+        ]]
+    ])
+]);
+$msProvider = new MicrosoftCalendarProvider($msCalendarClient, 'ms-access-token');
+$msCalendars = $msProvider->getCalendars();
+assertSameValue(3, count($msCalendars), 'Microsoft calendar discovery must follow trusted Graph pagination.');
+assertSameValue('AQMk-primary', $msCalendars[0]['providerId'], 'The default Microsoft calendar must be listed first.');
+assertSameValue('max@example.com', $msCalendars[0]['owner'], 'Microsoft calendar ownership must be retained for account display.');
+assertSameValue(true, $msCalendars[0]['capabilities']['create'], 'Editable Microsoft calendars must expose write capabilities.');
+assertSameValue(false, $msCalendars[2]['capabilities']['create'], 'Read-only Microsoft calendars must remain read-only.');
+assertSameValue(
+    'Bearer ms-access-token',
+    $msCalendarClient->requests[0]['headers']['Authorization'],
+    'Microsoft Graph requests must use Bearer authorization.'
+);
+assertTrueValue(
+    str_contains($msCalendarClient->requests[0]['headers']['Prefer'] ?? '', 'IdType="ImmutableId"'),
+    'Microsoft Graph requests must opt in to immutable Outlook IDs.'
+);
+assertSameValue(
+    'https://graph.microsoft.com/v1.0/me/calendars?$skiptoken=abc',
+    $msCalendarClient->requests[1]['url'],
+    'Microsoft Graph pagination must retain the trusted nextLink exactly.'
+);
+
+$msUntrustedPageClient = new FakeHttpClient([
+    response(200, [
+        'value' => [],
+        '@odata.nextLink' => 'https://evil.example/steal-token'
+    ])
+]);
+try {
+    (new MicrosoftCalendarProvider($msUntrustedPageClient, 'ms-access-token'))->getCalendars();
+    throw new RuntimeException('An untrusted Microsoft Graph nextLink was accepted.');
+} catch (MicrosoftCalendarProviderException $exception) {
+    assertTrueValue(
+        str_contains($exception->getMessage(), 'untrusted URL'),
+        'Untrusted Microsoft Graph pagination URLs must be rejected before the next request.'
+    );
+}
+
+$msEventClient = new FakeHttpClient([
+    response(200, [
+        'value' => [
+            [
+                'id'          => 'all-day-id',
+                'iCalUId'     => 'all-day@example.com',
+                '@odata.etag' => 'W/"etag-1"',
+                'subject'     => 'Holiday',
+                'isAllDay'    => true,
+                'start'       => ['dateTime' => '2026-07-20T00:00:00.0000000', 'timeZone' => 'UTC'],
+                'end'         => ['dateTime' => '2026-07-21T00:00:00.0000000', 'timeZone' => 'UTC'],
+                'type'        => 'singleInstance'
+            ],
+            [
+                'id'                => 'instance/id+1',
+                'iCalUId'           => 'series@example.com',
+                '@odata.etag'       => 'W/"etag-2"',
+                'subject'           => 'Teams meeting',
+                'body'              => ['contentType' => 'text', 'content' => 'Agenda'],
+                'location'          => ['displayName' => 'Berlin'],
+                'start'             => ['dateTime' => '2026-07-20T10:00:00.1234567', 'timeZone' => 'UTC'],
+                'end'               => ['dateTime' => '2026-07-20T11:00:00.1234567', 'timeZone' => 'UTC'],
+                'type'              => 'occurrence',
+                'seriesMasterId'    => 'series-master',
+                'isOnlineMeeting'   => true,
+                'webLink'           => 'https://outlook.office.com/calendar/item/1'
+            ],
+            [
+                'id'          => 'cancelled-id',
+                'subject'     => 'Cancelled',
+                'isCancelled' => true,
+                'start'       => ['dateTime' => '2026-07-20T12:00:00', 'timeZone' => 'UTC']
+            ]
+        ]
+    ])
+]);
+$msProvider = new MicrosoftCalendarProvider($msEventClient, 'ms-access-token');
+$msEvents = $msProvider->getEvents(
+    'AQMk-primary',
+    new DateTimeImmutable('2026-07-19T00:00:00Z'),
+    new DateTimeImmutable('2026-07-22T00:00:00Z')
+);
+assertSameValue(2, count($msEvents), 'Cancelled Microsoft events must be excluded.');
+assertSameValue(true, $msEvents[0]['allDay'], 'Microsoft all-day events must retain their exclusive end date.');
+assertSameValue('2026-07-21', $msEvents[0]['end'], 'Microsoft all-day end dates must remain exclusive.');
+assertSameValue(true, $msEvents[1]['recurring'], 'Microsoft occurrences must remain marked as recurring.');
+assertSameValue('series-master', $msEvents[1]['recurrenceId'], 'Microsoft series master IDs must be retained.');
+assertSameValue(true, $msEvents[1]['onlineMeeting'], 'Microsoft online-meeting state must be exposed to the calendar view.');
+assertTrueValue(
+    str_contains($msEventClient->requests[0]['url'], 'AQMk-primary/calendarView?'),
+    'Microsoft events must be read through calendarView for expanded occurrences.'
+);
+assertTrueValue(
+    str_contains($msEventClient->requests[0]['headers']['Prefer'] ?? '', 'outlook.body-content-type="text"')
+        && str_contains($msEventClient->requests[0]['headers']['Prefer'] ?? '', 'IdType="ImmutableId"'),
+    'Microsoft event reads must request text bodies and immutable IDs.'
+);
+
+$msWriteClient = new FakeHttpClient([
+    response(201, [
+        'id'          => 'created-id',
+        'iCalUId'     => 'created@example.com',
+        '@odata.etag' => 'W/"created"'
+    ]),
+    response(200, [
+        'id'          => 'created-id',
+        'iCalUId'     => 'created@example.com',
+        '@odata.etag' => 'W/"updated"'
+    ]),
+    response(200, ['isOnlineMeeting' => false]),
+    response(200, [
+        'id'          => 'created-id',
+        'iCalUId'     => 'created@example.com',
+        '@odata.etag' => 'W/"description-updated"'
+    ]),
+    response(204)
+]);
+$msProvider = new MicrosoftCalendarProvider($msWriteClient, 'ms-access-token');
+$msCreated = $msProvider->createEvent('AQMk-primary', [
+    'summary'     => 'Test',
+    'description' => 'Description',
+    'location'    => 'Berlin',
+    'allDay'      => false,
+    'start'       => '2026-07-20T10:00:00+02:00',
+    'end'         => '2026-07-20T11:00:00+02:00'
+]);
+assertSameValue('created-id', $msCreated['eventReference'], 'The created Microsoft event ID must be returned.');
+assertSameValue('POST', $msWriteClient->requests[0]['method'], 'Microsoft events must be created via POST.');
+$msCreateBody = json_decode($msWriteClient->requests[0]['body'], true, 512, JSON_THROW_ON_ERROR);
+assertSameValue('Test', $msCreateBody['subject'], 'Microsoft event subjects must be sent.');
+assertSameValue('text', $msCreateBody['body']['contentType'], 'Microsoft event descriptions must be sent as text.');
+assertSameValue('UTC', $msCreateBody['start']['timeZone'], 'Microsoft event writes must use unambiguous UTC times.');
+
+$msProvider->updateEvent(
+    'AQMk-primary',
+    $msCreated['resourceUrl'],
+    'W/"created"',
+    'created@example.com',
+    ['summary' => 'Updated']
+);
+assertSameValue('PATCH', $msWriteClient->requests[1]['method'], 'Microsoft events must be updated via PATCH.');
+assertSameValue('W/"created"', $msWriteClient->requests[1]['headers']['If-Match'], 'Microsoft updates must use ETags.');
+
+$msProvider->updateEvent(
+    'AQMk-primary',
+    $msCreated['resourceUrl'],
+    'W/"updated"',
+    'created@example.com',
+    ['description' => 'Updated description']
+);
+assertSameValue('GET', $msWriteClient->requests[2]['method'], 'Description changes must first check for protected online-meeting content.');
+assertTrueValue(
+    str_contains($msWriteClient->requests[2]['url'], '$select=isOnlineMeeting'),
+    'The online-meeting safety check should fetch only the required metadata.'
+);
+assertSameValue('PATCH', $msWriteClient->requests[3]['method'], 'Normal Microsoft event descriptions may be updated after the safety check.');
+assertTrueValue(
+    $msProvider->deleteEvent('AQMk-primary', $msCreated['resourceUrl'], 'W/"description-updated"'),
+    'Microsoft event deletion must return true after HTTP 204.'
+);
+assertSameValue('DELETE', $msWriteClient->requests[4]['method'], 'Microsoft events must be deleted via DELETE.');
+
+$msOnlineMeetingClient = new FakeHttpClient([
+    response(200, ['isOnlineMeeting' => true])
+]);
+try {
+    (new MicrosoftCalendarProvider($msOnlineMeetingClient, 'ms-access-token'))->updateEvent(
+        'AQMk-primary',
+        'online-event-id',
+        'W/"online"',
+        'online@example.com',
+        ['description' => 'Do not overwrite Teams meeting data']
+    );
+    throw new RuntimeException('A Microsoft online-meeting description was overwritten.');
+} catch (MicrosoftCalendarProviderException $exception) {
+    assertTrueValue(
+        str_contains($exception->getMessage(), 'cannot be changed safely'),
+        'Microsoft online-meeting descriptions must be protected from destructive updates.'
+    );
+    assertSameValue(1, count($msOnlineMeetingClient->requests), 'Protected online-meeting descriptions must not trigger PATCH.');
+}
+
+$msOAuthHttpClient = new FakeHttpClient([
+    response(200, [
+        'access_token'  => 'ms-access-token',
+        'refresh_token' => 'ms-refresh-token',
+        'expires_in'    => 3600,
+        'token_type'    => 'Bearer'
+    ]),
+    response(200, [
+        'access_token'  => 'ms-refreshed-access-token',
+        'refresh_token' => 'ms-rotated-refresh-token',
+        'expires_in'    => 1800,
+        'token_type'    => 'Bearer'
+    ])
+]);
+$msOAuth = new MicrosoftOAuthClient($msOAuthHttpClient, 'opencalendar_microsoft');
+$msAuthorizationUrl = $msOAuth->getAuthorizationUrl('license@example.com');
+$msAuthorizationQuery = [];
+parse_str((string) parse_url($msAuthorizationUrl, PHP_URL_QUERY), $msAuthorizationQuery);
+assertSameValue('oauth.ipmagic.de', parse_url($msAuthorizationUrl, PHP_URL_HOST), 'Microsoft authorization must use the Symcon OAuth service.');
+assertSameValue('/authorize/opencalendar_microsoft', parse_url($msAuthorizationUrl, PHP_URL_PATH), 'Microsoft authorization must use the registered shared OAuth identifier.');
+assertSameValue('license@example.com', $msAuthorizationQuery['username'], 'Symcon OAuth must route authorization using the license account.');
+assertTrueValue(
+    !str_contains($msAuthorizationUrl, 'client_secret') && !str_contains($msAuthorizationUrl, 'client_id='),
+    'Microsoft client credentials must never be exposed to OpenCalendar users.'
+);
+$msTokens = $msOAuth->exchangeAuthorizationCode('ms-code');
+assertSameValue('ms-refresh-token', $msTokens['refreshToken'], 'Microsoft authorization must store the delegated refresh token.');
+$msTokenBody = [];
+parse_str($msOAuthHttpClient->requests[0]['body'], $msTokenBody);
+assertSameValue(['code' => 'ms-code'], $msTokenBody, 'The Microsoft code exchange must delegate client credentials to the Symcon OAuth backend.');
+$msTokens = $msOAuth->refreshAccessToken('ms-refresh-token');
+assertSameValue('ms-rotated-refresh-token', $msTokens['refreshToken'], 'Rotating Microsoft refresh tokens must replace the stored token.');
+$msRefreshBody = [];
+parse_str($msOAuthHttpClient->requests[1]['body'], $msRefreshBody);
+assertSameValue(['refresh_token' => 'ms-refresh-token'], $msRefreshBody, 'Microsoft token renewal must use only the delegated refresh token.');
+
+$msOriginPolicy = new MicrosoftGraphOriginPolicy();
+assertTrueValue($msOriginPolicy->isAllowedUrl('https://graph.microsoft.com/v1.0/me/calendars'), 'The Microsoft Graph origin must be trusted.');
+assertTrueValue(!$msOriginPolicy->isAllowedUrl('https://graph.microsoft.com.evil.example/v1.0/me'), 'Lookalike Microsoft Graph hosts must be rejected.');
+assertTrueValue(!$msOriginPolicy->isAllowedUrl('http://graph.microsoft.com/v1.0/me'), 'Microsoft Graph must never downgrade to HTTP.');
+assertTrueValue(!$msOriginPolicy->isAllowedUrl('https://graph.microsoft.com:444/v1.0/me'), 'Unexpected Microsoft Graph ports must be rejected.');
+
+$symconOAuthOriginPolicy = new SymconOAuthOriginPolicy();
+assertTrueValue($symconOAuthOriginPolicy->isAllowedUrl('https://oauth.ipmagic.de/access_token/opencalendar_microsoft'), 'The Symcon OAuth origin must be trusted.');
+assertTrueValue(!$symconOAuthOriginPolicy->isAllowedUrl('https://oauth.ipmagic.de.evil.example/access_token'), 'Lookalike Symcon OAuth hosts must be rejected.');
 
 $icalFeed = "BEGIN:VCALENDAR\r\n"
     . "VERSION:2.0\r\n"

@@ -444,7 +444,9 @@ class KalenderAnsicht extends IPSModuleStrict
                 'more', 'Create event', 'Event details', 'Calendar', 'Title', 'Start', 'End', 'Location',
                 'Description', 'Cancel', 'Save', 'Delete', 'Close', 'Tomorrow', 'Yesterday',
                 'Recurring occurrences are currently read-only.', 'This calendar is read-only.',
-                'Editing events is only available in the Symcon tile.', 'Delete this event?'
+                'Editing events is only available in the Symcon tile.',
+                'The description of Microsoft online meetings is protected and cannot be edited here.',
+                'Delete this event?'
             ] as $text) {
                 $translations[$text] = $this->Translate($text);
             }

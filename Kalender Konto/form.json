@@ -24,7 +24,7 @@
                     "value": 2
                 },
                 {
-                    "caption": "Microsoft 365 (planned)",
+                    "caption": "Microsoft 365",
                     "value": 3
                 },
                 {
@@ -289,6 +289,39 @@
             "onClick": "IPSKALACC_DisconnectGoogle($id);"
         },
         {
+            "type": "Label",
+            "name": "MicrosoftOAuthHint",
+            "caption": "Connect your Microsoft 365 or Outlook.com account directly through Symcon. No client ID or client secret is required.",
+            "visible": false
+        },
+        {
+            "type": "Label",
+            "name": "MicrosoftConnectHint",
+            "caption": "Only calendar access is requested. An active Symcon Connect connection is required for sign-in.",
+            "visible": false
+        },
+        {
+            "type": "Label",
+            "name": "MicrosoftStatus",
+            "caption": "Microsoft account is not connected.",
+            "visible": false
+        },
+        {
+            "type": "Button",
+            "name": "MicrosoftConnect",
+            "caption": "Connect Microsoft account",
+            "visible": false,
+            "onClick": "$result = IPSKALACC_ConnectMicrosoft($id); if (str_starts_with($result, 'http://') || str_starts_with($result, 'https://')) { echo $result; } else { IPS_RequestAction($id, 'FormMicrosoftAuthorizationFailed', ''); }"
+        },
+        {
+            "type": "Button",
+            "name": "MicrosoftDisconnect",
+            "caption": "Disconnect Microsoft account",
+            "visible": false,
+            "confirm": "Do you really want to disconnect the Microsoft account?",
+            "onClick": "IPSKALACC_DisconnectMicrosoft($id);"
+        },
+        {
             "type": "Select",
             "name": "UpdateSchedule",
             "caption": "Synchronization schedule",
@@ -462,6 +495,19 @@
                     {
                         "type": "Label",
                         "caption": "Google authorization could not be started. Please check the instance status for details."
+                    }
+                ]
+            }
+        },
+        {
+            "type": "PopupAlert",
+            "name": "MicrosoftAuthorizationFailedPopup",
+            "visible": false,
+            "popup": {
+                "items": [
+                    {
+                        "type": "Label",
+                        "caption": "Microsoft authorization could not be started. Please check the instance status for details."
                     }
                 ]
             }

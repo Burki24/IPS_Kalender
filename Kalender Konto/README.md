@@ -6,6 +6,7 @@ Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die 
 
 - Apple iCloud über CalDAV und anwendungsspezifisches Passwort
 - Google Calendar über OAuth 2.0 und die Google Calendar API v3
+- Microsoft 365 und Outlook.com über den nativen Symcon-OAuth-Handler und Microsoft Graph
 - generische CalDAV-Server
 - mehrere schreibgeschützte iCalendar-Abonnements über HTTP(S)- oder Webcal-URL in einem Konto
 - CalDAV-Discovery von Principal, Calendar Home Set und Kalendern
@@ -14,10 +15,7 @@ Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die 
 - persistenter iCalendar-Feed-Cache mit HTTP-Validierung und Rückfallebene
 - zyklische Synchronisation
 - einheitlicher Datenfluss zum Kalender-Konfigurator und zu Kalenderinstanzen
-- Lesen, Erstellen, Bearbeiten und Löschen von Google-Terminen entsprechend der Kalenderrechte
-- vorbereitete Provider-Auswahl für Microsoft 365
-
-Microsoft ist in diesem Entwicklungsstand noch nicht implementiert.
+- Lesen, Erstellen, Bearbeiten und Löschen von Google- und Microsoft-Terminen entsprechend der Kalenderrechte
 
 ## Voraussetzungen
 
@@ -25,6 +23,7 @@ Microsoft ist in diesem Entwicklungsstand noch nicht implementiert.
 - PHP-Erweiterungen cURL und DOM
 - Zugriff des Symcon-Servers auf den jeweiligen Kalenderdienst
 - für Google Calendar eine aktive Symcon-Connect-Verbindung und ein persönlicher Google-OAuth-Webclient
+- für Microsoft 365/Outlook.com eine aktive Symcon-Connect-Verbindung; keine eigenen OAuth-Zugangsdaten des Anwenders
 
 Für Apple iCloud wird ein anwendungsspezifisches Passwort benötigt. Das normale Kennwort des Apple Accounts sollte nicht verwendet werden.
 
@@ -35,7 +34,7 @@ Unter **Instanz hinzufügen** das Modul **Kalender Konto** auswählen.
 Eigenschaft | Beschreibung
 --- | ---
 Aktiv | Aktiviert die regelmäßige Synchronisation
-Anbieter | Apple iCloud, Google Calendar, generischer CalDAV-Server oder ICS/Webcal
+Anbieter | Apple iCloud, Google Calendar, Microsoft 365, generischer CalDAV-Server oder ICS/Webcal
 Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers. Bei ICS/Webcal bleibt hier ein bereits vorhandenes einzelnes Abonnement aus Kompatibilitätsgründen erhalten
 Kalendername | Optionale Bezeichnung des bisherigen einzelnen iCalendar-Abonnements
 Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; beim bisherigen einzelnen iCalendar-Abonnement optional
@@ -91,6 +90,46 @@ gegebenenfalls notwendige Google-Verifizierung richtet sich nach Nutzerkreis
 und angeforderten Berechtigungen.
 
 Kalender mit den Google-Rollen `owner` und `writer` werden als les- und schreibbar erkannt. `reader` wird schreibgeschützt angeboten. Einträge mit ausschließlich `freeBusyReader` werden nicht angelegt, weil sie keine Termindetails liefern.
+
+### Microsoft 365 / Outlook.com
+
+Nach Auswahl von **Microsoft 365** werden keine Client-ID und kein
+Clientschlüssel abgefragt. Mit **Microsoft-Konto verbinden** öffnet Symcon den
+zentral registrierten OAuth-Ablauf im Browser. Der Anwender meldet sich direkt
+bei Microsoft an und bestätigt ausschließlich den Zugriff auf seine Kalender.
+
+Unterstützt werden Microsoft-365-Geschäfts-/Schulkonten und persönliche
+Microsoft-Konten wie Outlook.com. Das Modul verwendet delegierten
+`Calendars.ReadWrite`-Zugriff und einen Refresh-Token für den Hintergrundbetrieb.
+Mail, Kontakte, OneDrive oder andere Microsoft-Graph-Bereiche werden nicht
+angefordert.
+
+Nach erfolgreicher Anmeldung genügt **Jetzt synchronisieren**. Die gefundenen
+Kalender werden danach wie gewohnt im zugehörigen **Kalender Konfigurator**
+angeboten. Microsofts `canEdit`-Angabe bestimmt, ob eine Kalenderinstanz
+schreibbar oder schreibgeschützt angelegt wird.
+
+Für Terminabfragen verwendet das Modul `calendarView`, sodass einzelne
+Vorkommen von Terminserien im angeforderten Zeitraum aufgelöst geliefert
+werden. Für Outlook-Ressourcen wird `Prefer: IdType="ImmutableId"` gesendet,
+damit gespeicherte Termin-IDs möglichst stabil bleiben. HTTP-Weiterleitungen
+und von Graph gelieferte Folgeseiten werden auf die vertrauenswürdige Origin
+`https://graph.microsoft.com` beschränkt.
+
+Bei bestehenden Microsoft-Onlinebesprechungen wird die Beschreibung in der
+Kalenderansicht bewusst nicht bearbeitbar angeboten. Microsoft legt darin
+Besprechungsinformationen ab, die bei einem unvollständigen Überschreiben
+verloren gehen könnten. Titel, Ort und Zeit können weiterhin geändert werden.
+
+Der Refresh-Token wird als internes Attribut gespeichert; Access-Tokens liegen
+nur kurzzeitig im Instanzpuffer. **Microsoft-Konto trennen** löscht die lokal
+gespeicherten Microsoft-Zugangsdaten.
+
+Für die zentrale OAuth-Anbindung muss der Modulautor den Identifier
+`opencalendar_microsoft` einmalig beim Symcon-OAuth-Dienst registrieren lassen.
+Die zugehörige Microsoft-Entra-App verwendet als Redirect-URI
+`https://oauth.ipmagic.de/forward/opencalendar_microsoft`. Diese Einrichtung
+findet einmalig für das Modul statt und ist keine Aufgabe des Endanwenders.
 
 ### ICS/Webcal
 
@@ -204,6 +243,8 @@ void IPSKALACC_ClearCache(int $InstanzID);
 string IPSKALACC_ConnectGoogle(int $InstanzID);
 string IPSKALACC_GetGoogleRedirectURI(int $InstanzID);
 bool IPSKALACC_DisconnectGoogle(int $InstanzID);
+string IPSKALACC_ConnectMicrosoft(int $InstanzID);
+bool IPSKALACC_DisconnectMicrosoft(int $InstanzID);
 ```
 
 Die Methoden mit komplexen Rückgabewerten liefern JSON. Passwörter und OAuth-Tokens werden weder in Rückgabewerte noch in Debugmeldungen geschrieben.
