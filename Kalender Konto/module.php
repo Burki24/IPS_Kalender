@@ -10,6 +10,7 @@ use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\GoogleCalendarProviderException;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
+use IPSKalender\ICalendarSubscriptionProvider;
 use IPSKalender\OAuthBridgeClient;
 use IPSKalender\OAuthBridgeException;
 use IPSKalender\SynchronizationSchedule;
@@ -19,6 +20,7 @@ require_once __DIR__ . '/../libs/CalendarHttpClient.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
+require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
@@ -50,6 +52,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
         $this->RegisterPropertyString('CalendarName', '');
+        $this->RegisterPropertyString('ICalendarFeeds', '[]');
         $this->RegisterPropertyInteger('UpdateSchedule', SynchronizationSchedule::CUSTOM);
         $this->RegisterPropertyInteger('UpdateInterval', 15);
         $this->RegisterPropertyBoolean('VerifyTLS', true);
@@ -91,8 +94,17 @@ class KalenderKonto extends IPSModuleStrict
                 $element['visible'] = $isPasswordProvider;
             } elseif ($name === 'CalendarName') {
                 $element['visible'] = $isIcs;
+            } elseif (in_array($name, ['ICalendarFeeds', 'ICalendarSubscriptionsHint'], true)) {
+                $element['visible'] = $isIcs;
+            } elseif ($name === 'UpdateSchedule') {
+                $element['caption'] = $isIcs
+                    ? $this->Translate('Account discovery schedule')
+                    : $this->Translate('Synchronization schedule');
             } elseif ($name === 'UpdateInterval') {
                 $element['visible'] = $this->ReadPropertyInteger('UpdateSchedule') === SynchronizationSchedule::CUSTOM;
+                $element['caption'] = $isIcs
+                    ? $this->Translate('Account custom interval')
+                    : $this->Translate('Custom interval');
             } elseif (in_array($name, ['GoogleStatus', 'GoogleConnect', 'GoogleDisconnect'], true)) {
                 $element['visible'] = $isGoogle;
                 if ($name === 'GoogleStatus') {
@@ -122,6 +134,18 @@ class KalenderKonto extends IPSModuleStrict
         $this->UpdateFormField('Username', 'visible', $isPasswordProvider);
         $this->UpdateFormField('Password', 'visible', $isPasswordProvider);
         $this->UpdateFormField('CalendarName', 'visible', $isIcs);
+        $this->UpdateFormField('ICalendarFeeds', 'visible', $isIcs);
+        $this->UpdateFormField('ICalendarSubscriptionsHint', 'visible', $isIcs);
+        $this->UpdateFormField(
+            'UpdateSchedule',
+            'caption',
+            $isIcs ? $this->Translate('Account discovery schedule') : $this->Translate('Synchronization schedule')
+        );
+        $this->UpdateFormField(
+            'UpdateInterval',
+            'caption',
+            $isIcs ? $this->Translate('Account custom interval') : $this->Translate('Custom interval')
+        );
         $this->UpdateFormField('GoogleStatus', 'visible', $isGoogle);
         $this->UpdateFormField('GoogleConnect', 'visible', $isGoogle && !$this->isGoogleConnected());
         $this->UpdateFormField('GoogleDisconnect', 'visible', $isGoogle && $this->isGoogleConnected());
@@ -206,7 +230,7 @@ class KalenderKonto extends IPSModuleStrict
         $providerName = $this->getProviderName($this->ReadPropertyInteger('Provider'));
         $username = match ($this->ReadPropertyInteger('Provider')) {
             self::PROVIDER_GOOGLE => trim($this->ReadAttributeString('GoogleAccount')),
-            self::PROVIDER_ICS    => trim($this->ReadPropertyString('CalendarName')),
+            self::PROVIDER_ICS    => $this->iCalendarSummary(),
             default               => trim($this->ReadPropertyString('Username'))
         };
         $this->SetSummary($username !== '' ? $providerName . ' – ' . $username : $providerName);
@@ -606,15 +630,20 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         if ($provider === self::PROVIDER_ICS) {
-            return new ICalendarFeedProvider(
-                new CalendarHttpClient(
-                    max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
-                    $this->ReadPropertyBoolean('VerifyTLS'),
-                    trim($this->ReadPropertyString('Username')),
-                    $this->ReadPropertyString('Password')
-                ),
-                trim($this->ReadPropertyString('ServerURL')),
-                trim($this->ReadPropertyString('CalendarName'))
+            return new ICalendarSubscriptionProvider(
+                $this->iCalendarSubscriptions(),
+                function (array $subscription): ICalendarFeedProvider {
+                    return new ICalendarFeedProvider(
+                        new CalendarHttpClient(
+                            max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
+                            $this->ReadPropertyBoolean('VerifyTLS'),
+                            (string) ($subscription['username'] ?? ''),
+                            (string) ($subscription['password'] ?? '')
+                        ),
+                        (string) ($subscription['url'] ?? ''),
+                        (string) ($subscription['name'] ?? '')
+                    );
+                }
             );
         }
 
@@ -662,8 +691,43 @@ class KalenderKonto extends IPSModuleStrict
             return 'The CalDAV server URL is missing.';
         }
 
-        if ($provider === self::PROVIDER_ICS && trim($this->ReadPropertyString('ServerURL')) === '') {
-            return 'The iCalendar URL is missing.';
+        if ($provider === self::PROVIDER_ICS) {
+            $subscriptions = $this->iCalendarSubscriptions();
+            if ($subscriptions === []) {
+                return 'At least one active iCalendar subscription is required.';
+            }
+            $subscriptionUrls = [];
+            foreach ($subscriptions as $subscription) {
+                $url = trim((string) ($subscription['url'] ?? ''));
+                if (filter_var($url, FILTER_VALIDATE_URL) === false
+                    || !in_array(strtolower((string) parse_url($url, PHP_URL_SCHEME)), ['http', 'https', 'webcal'], true)) {
+                    return sprintf(
+                        'The iCalendar URL for subscription "%s" is invalid.',
+                        trim((string) ($subscription['name'] ?? ''))
+                    );
+                }
+                $urlKey = $this->iCalendarUrlKey($url);
+                if (isset($subscriptionUrls[$urlKey])) {
+                    return sprintf(
+                        'The iCalendar URL for subscription "%s" is configured more than once.',
+                        trim((string) ($subscription['name'] ?? ''))
+                    );
+                }
+                $subscriptionUrls[$urlKey] = true;
+                $color = strtoupper(trim((string) ($subscription['color'] ?? '')));
+                if ($color !== '' && preg_match('/^#[0-9A-F]{6}$/', $color) !== 1) {
+                    return sprintf(
+                        'The color for iCalendar subscription "%s" is invalid.',
+                        trim((string) ($subscription['name'] ?? ''))
+                    );
+                }
+                if (!SynchronizationSchedule::isValid((int) ($subscription['updateSchedule'] ?? -1))) {
+                    return sprintf(
+                        'The synchronization schedule for iCalendar subscription "%s" is invalid.',
+                        trim((string) ($subscription['name'] ?? ''))
+                    );
+                }
+            }
         }
 
         if ($provider === self::PROVIDER_GOOGLE && !$this->isGoogleConnected()) {
@@ -824,13 +888,111 @@ class KalenderKonto extends IPSModuleStrict
             $message = str_replace($password, '***', $message);
         }
         if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS) {
-            $feedUrl = trim($this->ReadPropertyString('ServerURL'));
-            if ($feedUrl !== '') {
-                $message = str_replace($feedUrl, '[iCalendar URL]', $message);
+            foreach ($this->iCalendarSubscriptions() as $subscription) {
+                $feedUrl = trim((string) ($subscription['url'] ?? ''));
+                $feedPassword = (string) ($subscription['password'] ?? '');
+                if ($feedUrl !== '') {
+                    $message = str_replace($feedUrl, '[iCalendar URL]', $message);
+                }
+                if ($feedPassword !== '') {
+                    $message = str_replace($feedPassword, '***', $message);
+                }
             }
         }
 
         return $message;
+    }
+
+    /**
+     * @return list<array{
+     *     url: string,
+     *     name: string,
+     *     username: string,
+     *     password: string,
+     *     color: string,
+     *     updateSchedule: int,
+     *     updateInterval: int
+     * }>
+     */
+    private function iCalendarSubscriptions(): array
+    {
+        try {
+            $configured = json_decode(
+                $this->ReadPropertyString('ICalendarFeeds'),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+        } catch (JsonException) {
+            $configured = [];
+        }
+
+        $subscriptions = [];
+        $configuredUrls = [];
+        if (is_array($configured)) {
+            foreach ($configured as $feed) {
+                if (!is_array($feed)
+                    || !(bool) ($feed['Active'] ?? $feed['active'] ?? true)) {
+                    continue;
+                }
+                $url = trim((string) ($feed['URL'] ?? $feed['url'] ?? ''));
+                $subscriptions[] = [
+                    'url'            => $url,
+                    'name'           => trim((string) ($feed['Name'] ?? $feed['name'] ?? '')),
+                    'username'       => trim((string) ($feed['Username'] ?? $feed['username'] ?? '')),
+                    'password'       => (string) ($feed['Password'] ?? $feed['password'] ?? ''),
+                    'color'          => trim((string) ($feed['Color'] ?? $feed['color'] ?? '')),
+                    'updateSchedule' => (int) (
+                        $feed['UpdateSchedule']
+                        ?? $feed['updateSchedule']
+                        ?? $this->ReadPropertyInteger('UpdateSchedule')
+                    ),
+                    'updateInterval' => (int) (
+                        $feed['UpdateInterval']
+                        ?? $feed['updateInterval']
+                        ?? $this->ReadPropertyInteger('UpdateInterval')
+                    )
+                ];
+                $configuredUrls[$this->iCalendarUrlKey($url)] = true;
+            }
+        }
+
+        $legacyUrl = trim($this->ReadPropertyString('ServerURL'));
+        if ($legacyUrl !== ''
+            && $legacyUrl !== self::APPLE_CALDAV_URL
+            && !isset($configuredUrls[$this->iCalendarUrlKey($legacyUrl)])) {
+            array_unshift($subscriptions, [
+                'url'            => $legacyUrl,
+                'name'           => trim($this->ReadPropertyString('CalendarName')),
+                'username'       => trim($this->ReadPropertyString('Username')),
+                'password'       => $this->ReadPropertyString('Password'),
+                'color'          => '',
+                'updateSchedule' => $this->ReadPropertyInteger('UpdateSchedule'),
+                'updateInterval' => $this->ReadPropertyInteger('UpdateInterval')
+            ]);
+        }
+
+        return $subscriptions;
+    }
+
+    private function iCalendarSummary(): string
+    {
+        $subscriptions = $this->iCalendarSubscriptions();
+        if (count($subscriptions) > 1) {
+            return sprintf($this->Translate('%d subscriptions'), count($subscriptions));
+        }
+
+        return trim((string) ($subscriptions[0]['name'] ?? ''));
+    }
+
+    private function iCalendarUrlKey(string $url): string
+    {
+        $url = trim($url);
+        if (str_starts_with(strtolower($url), 'webcal://')) {
+            $url = 'https://' . substr($url, 9);
+        }
+
+        return $url;
     }
 
     private function encodeResponse(

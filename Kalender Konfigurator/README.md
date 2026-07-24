@@ -10,6 +10,7 @@ Kontos** an und erstellt daraus vollständig konfigurierte
 - zeigt Kalendername, Farbe, Zugriffsart und vorhandene Instanz an
 - erstellt ausgewählte oder alle noch nicht angelegten Kalender
 - übernimmt Kalender-ID, Anbieter-ID, Farbe und Schreibrechte
+- übernimmt bei ICS/Webcal den für das Abonnement voreingestellten Aktualisierungsplan
 - verbindet jede erzeugte Kalender-Instanz mit dem richtigen Konto
 - erkennt bereits für dieses Konto angelegte Kalender-Instanzen
 

@@ -7,7 +7,7 @@ Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die 
 - Apple iCloud über CalDAV und anwendungsspezifisches Passwort
 - Google Calendar über OAuth 2.0 und die Google Calendar API v3
 - generische CalDAV-Server
-- schreibgeschützte iCalendar-Abonnements über HTTP(S)- oder Webcal-URL
+- mehrere schreibgeschützte iCalendar-Abonnements über HTTP(S)- oder Webcal-URL in einem Konto
 - CalDAV-Discovery von Principal, Calendar Home Set und Kalendern
 - Erkennung von Kalendername, Beschreibung, Farbe und Zugriffsrechten
 - Zwischenspeicherung der gefundenen Kalender
@@ -35,11 +35,12 @@ Eigenschaft | Beschreibung
 --- | ---
 Aktiv | Aktiviert die regelmäßige Synchronisation
 Anbieter | Apple iCloud, Google Calendar, generischer CalDAV-Server oder ICS/Webcal
-Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers beziehungsweise iCalendar-Feeds
-Kalendername | Optionale Bezeichnung eines iCalendar-Abonnements; ohne Angabe wird `X-WR-CALNAME` verwendet
-Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; bei iCalendar optional
-Passwort | Passwort oder anwendungsspezifisches Passwort; bei iCalendar optional
-Aktualisierungsplan | Vorgegebener Rhythmus von fünf Minuten bis jährlich oder ausschließlich manuelle Synchronisation
+Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers. Bei ICS/Webcal bleibt hier ein bereits vorhandenes einzelnes Abonnement aus Kompatibilitätsgründen erhalten
+Kalendername | Optionale Bezeichnung des bisherigen einzelnen iCalendar-Abonnements
+Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; beim bisherigen einzelnen iCalendar-Abonnement optional
+Passwort | Passwort oder anwendungsspezifisches Passwort; beim bisherigen einzelnen iCalendar-Abonnement optional
+iCalendar-Abonnements | Liste zusätzlicher Feeds mit Aktivierung, Name, URL, optionalen Zugangsdaten, Aktualisierungsplan und optionaler Farbe
+Aktualisierungsplan | Vorgegebener Rhythmus von fünf Minuten bis jährlich oder ausschließlich manuelle Synchronisation; bei ICS/Webcal steuert er die erneute Kontosuche
 Benutzerdefiniertes Intervall | Eigener Abstand in Minuten; wird nur beim Zeitplan „Benutzerdefiniertes Intervall“ angezeigt
 TLS-Zertifikat prüfen | Sollte nur zu Diagnosezwecken deaktiviert werden
 Zeitlimit der Anfrage | Maximale Dauer einer HTTP-Anfrage
@@ -66,7 +67,34 @@ Kalender mit den Google-Rollen `owner` und `writer` werden als les- und schreibb
 
 ### ICS/Webcal
 
-Nach Auswahl von **ICS/Webcal** wird die private oder öffentliche iCalendar-Adresse als **iCalendar-URL** eingetragen. `webcal://` wird automatisch über HTTPS abgerufen. Ein optionaler Kalendername überschreibt die im Feed enthaltene Eigenschaft `X-WR-CALNAME`. Benutzername und Passwort werden nur benötigt, wenn der Feed zusätzlich durch HTTP-Authentifizierung geschützt ist.
+Nach Auswahl von **ICS/Webcal** können in der Liste
+**iCalendar-Abonnements** mehrere private oder öffentliche Feeds gemeinsam
+verwaltet werden. Jeder Eintrag besitzt:
+
+- Aktivierung
+- Kalendername
+- HTTP(S)- oder Webcal-URL
+- optionalen Benutzernamen und optionales Passwort für HTTP-Authentifizierung
+- eigenen Aktualisierungsplan
+- benutzerdefiniertes Intervall für den entsprechenden Zeitplantyp
+- optionale Kalenderfarbe im Format `#RRGGBB`
+
+Bleibt die Farbe leer, verwendet das Modul – sofern vorhanden – die Farbe aus
+dem Feed. `webcal://` wird automatisch über HTTPS abgerufen. Ein eingetragener
+Kalendername überschreibt die im Feed enthaltene Eigenschaft `X-WR-CALNAME`.
+
+Die bisherigen Felder **iCalendar-URL**, **Kalendername**, **Benutzername** und
+**Passwort** bleiben für bereits eingerichtete Einzel-Feed-Konten
+rückwärtskompatibel. Der dort konfigurierte Feed wird zusätzlich zu den
+Listeneinträgen angeboten. Ist dieselbe URL bereits in der Liste enthalten,
+wird sie nicht doppelt angelegt.
+
+Nach der Kontosynchronisation zeigt der zugehörige Konfigurator alle aktiven
+Abonnements als einzelne Kalender an. Die Kalender-Instanzen müssen dort
+erstellt werden. Der für einen Listeneintrag gewählte Aktualisierungsplan wird
+als Anfangskonfiguration der neu erzeugten Kalender-Instanz übernommen.
+Spätere Änderungen des Instanzzeitplans erfolgen in der jeweiligen
+Kalender-Instanz.
 
 iCalendar-Abonnements sind grundsätzlich schreibgeschützt. Die Feed-URL kann – etwa bei Googles „Privatadresse im iCal-Format“ – selbst ein Zugangsgeheimnis enthalten und sollte daher wie ein Passwort behandelt werden.
 

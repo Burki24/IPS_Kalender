@@ -8,11 +8,13 @@ use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\ICalendarCodec;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
+use IPSKalender\ICalendarSubscriptionProvider;
 use IPSKalender\OAuthBridgeClient;
 use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
+require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
@@ -242,6 +244,101 @@ try {
     throw new RuntimeException('The read-only feed unexpectedly accepted an event.');
 } catch (ICalendarFeedProviderException $exception) {
     assertTrueValue(str_contains($exception->getMessage(), 'read-only'), 'Write attempts must explain the read-only limitation.');
+}
+
+$secondIcalFeed = str_replace(
+    ['Google Privat', '#34AADCFF', 'inside@example.com', 'Included event'],
+    ['Waste collection', '#6D3A38FF', 'waste@example.com', 'Waste collection event'],
+    $icalFeed
+);
+$subscriptionFactoryCalls = [];
+$subscriptionProvider = new ICalendarSubscriptionProvider(
+    [
+        [
+            'url'            => 'https://calendar.example/private.ics',
+            'name'           => 'Private',
+            'username'       => '',
+            'password'       => '',
+            'color'          => '#112233',
+            'updateSchedule' => SynchronizationSchedule::HOURLY,
+            'updateInterval' => 15
+        ],
+        [
+            'url'            => 'https://calendar.example/waste.ics',
+            'name'           => 'Waste',
+            'username'       => 'feed-user',
+            'password'       => 'feed-password',
+            'color'          => '',
+            'updateSchedule' => SynchronizationSchedule::WEEKLY,
+            'updateInterval' => 15
+        ]
+    ],
+    static function (array $subscription) use (
+        &$subscriptionFactoryCalls,
+        $icalFeed,
+        $secondIcalFeed
+    ): ICalendarFeedProvider {
+        $subscriptionFactoryCalls[] = $subscription;
+        $body = str_contains((string) $subscription['url'], 'waste.ics') ? $secondIcalFeed : $icalFeed;
+
+        return new ICalendarFeedProvider(
+            new FakeHttpClient([
+                new CalendarHttpResponse(200, [], $body, (string) $subscription['url'])
+            ]),
+            (string) $subscription['url'],
+            (string) $subscription['name']
+        );
+    }
+);
+$subscriptionCalendars = $subscriptionProvider->getCalendars();
+assertSameValue(2, count($subscriptionCalendars), 'All active iCalendar subscriptions must be exposed as calendars.');
+assertSameValue('Private', $subscriptionCalendars[0]['name'], 'A configured subscription name must override the feed name.');
+assertSameValue('#112233', $subscriptionCalendars[0]['color'], 'A configured subscription color must override the feed color.');
+assertSameValue(
+    SynchronizationSchedule::WEEKLY,
+    $subscriptionCalendars[1]['updateSchedule'],
+    'The subscription schedule must be passed to the calendar configurator.'
+);
+assertTrueValue(
+    !str_contains($subscriptionCalendars[1]['reference'], 'waste.ics'),
+    'Subscription references must not expose secret feed URLs.'
+);
+$subscriptionEvents = $subscriptionProvider->getEvents(
+    $subscriptionCalendars[1]['reference'],
+    new DateTimeImmutable('2026-07-19T00:00:00Z'),
+    new DateTimeImmutable('2026-07-22T00:00:00Z')
+);
+assertSameValue(1, count($subscriptionEvents), 'The selected subscription must return its own events.');
+assertSameValue(
+    'Waste collection event',
+    $subscriptionEvents[0]['summary'],
+    'Calendar references must be routed to the matching subscription.'
+);
+assertSameValue(
+    'feed-user',
+    $subscriptionFactoryCalls[2]['username'],
+    'Per-subscription credentials must be passed only to the selected feed provider.'
+);
+$subscriptionConnection = $subscriptionProvider->testConnection();
+assertSameValue(2, $subscriptionConnection['calendarCount'], 'A connection test must include every subscription.');
+assertSameValue(4, $subscriptionConnection['eventCount'], 'A connection test must total all feed events.');
+try {
+    new ICalendarSubscriptionProvider(
+        [
+            ['url' => 'https://calendar.example/duplicate.ics'],
+            ['url' => 'https://calendar.example/duplicate.ics']
+        ],
+        static fn(array $subscription): ICalendarFeedProvider => new ICalendarFeedProvider(
+            new FakeHttpClient([]),
+            (string) $subscription['url']
+        )
+    );
+    throw new RuntimeException('Duplicate iCalendar subscriptions were unexpectedly accepted.');
+} catch (InvalidArgumentException $exception) {
+    assertTrueValue(
+        str_contains($exception->getMessage(), 'more than once'),
+        'Duplicate subscription URLs must produce an actionable validation error.'
+    );
 }
 
 $recurringFeed = "BEGIN:VCALENDAR\r\n"
