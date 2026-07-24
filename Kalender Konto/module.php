@@ -8,6 +8,8 @@ use IPSKalender\CalDAVProvider;
 use IPSKalender\CalDAVProviderException;
 use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\GoogleCalendarProviderException;
+use IPSKalender\ICalendarFeedProvider;
+use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\OAuthBridgeClient;
 use IPSKalender\OAuthBridgeException;
 
@@ -15,6 +17,7 @@ require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 
 class KalenderKonto extends IPSModuleStrict
@@ -44,6 +47,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyString('ServerURL', self::APPLE_CALDAV_URL);
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
+        $this->RegisterPropertyString('CalendarName', '');
         $this->RegisterPropertyInteger('UpdateInterval', 15);
         $this->RegisterPropertyBoolean('VerifyTLS', true);
         $this->RegisterPropertyInteger('RequestTimeout', 30);
@@ -67,19 +71,23 @@ class KalenderKonto extends IPSModuleStrict
             JSON_THROW_ON_ERROR
         );
         $provider = $this->ReadPropertyInteger('Provider');
-        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV], true);
+        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
         $isGoogle = $provider === self::PROVIDER_GOOGLE;
+        $isIcs = $provider === self::PROVIDER_ICS;
 
         foreach ($form['elements'] as &$element) {
             $name = (string) ($element['name'] ?? '');
             if ($name === 'ServerURL') {
                 $element['visible'] = $isPasswordProvider;
-                $element['enabled'] = $provider === self::PROVIDER_CALDAV;
+                $element['enabled'] = in_array($provider, [self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
+                $element['caption'] = $isIcs ? $this->Translate('iCalendar URL') : $this->Translate('Server URL');
                 if ($provider === self::PROVIDER_APPLE) {
                     $element['value'] = self::APPLE_CALDAV_URL;
                 }
             } elseif (in_array($name, ['Username', 'Password'], true)) {
                 $element['visible'] = $isPasswordProvider;
+            } elseif ($name === 'CalendarName') {
+                $element['visible'] = $isIcs;
             } elseif (in_array($name, ['GoogleStatus', 'GoogleConnect', 'GoogleDisconnect'], true)) {
                 $element['visible'] = $isGoogle;
                 if ($name === 'GoogleStatus') {
@@ -101,11 +109,14 @@ class KalenderKonto extends IPSModuleStrict
 
     public function UpdateProviderForm(int $provider): void
     {
-        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV], true);
+        $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
         $isGoogle = $provider === self::PROVIDER_GOOGLE;
+        $isIcs = $provider === self::PROVIDER_ICS;
         $this->UpdateFormField('ServerURL', 'visible', $isPasswordProvider);
+        $this->UpdateFormField('ServerURL', 'caption', $isIcs ? $this->Translate('iCalendar URL') : $this->Translate('Server URL'));
         $this->UpdateFormField('Username', 'visible', $isPasswordProvider);
         $this->UpdateFormField('Password', 'visible', $isPasswordProvider);
+        $this->UpdateFormField('CalendarName', 'visible', $isIcs);
         $this->UpdateFormField('GoogleStatus', 'visible', $isGoogle);
         $this->UpdateFormField('GoogleConnect', 'visible', $isGoogle && !$this->isGoogleConnected());
         $this->UpdateFormField('GoogleDisconnect', 'visible', $isGoogle && $this->isGoogleConnected());
@@ -117,6 +128,16 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         if ($provider === self::PROVIDER_CALDAV) {
+            $storedProvider = $this->ReadPropertyInteger('Provider');
+            $storedServerUrl = trim($this->ReadPropertyString('ServerURL'));
+            if ($storedProvider === self::PROVIDER_APPLE || $storedServerUrl === self::APPLE_CALDAV_URL) {
+                $this->UpdateFormField('ServerURL', 'value', '');
+            }
+            $this->UpdateFormField('ServerURL', 'enabled', true);
+            return;
+        }
+
+        if ($provider === self::PROVIDER_ICS) {
             $storedProvider = $this->ReadPropertyInteger('Provider');
             $storedServerUrl = trim($this->ReadPropertyString('ServerURL'));
             if ($storedProvider === self::PROVIDER_APPLE || $storedServerUrl === self::APPLE_CALDAV_URL) {
@@ -169,9 +190,11 @@ class KalenderKonto extends IPSModuleStrict
         parent::ApplyChanges();
 
         $providerName = $this->getProviderName($this->ReadPropertyInteger('Provider'));
-        $username = $this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE
-            ? trim($this->ReadAttributeString('GoogleAccount'))
-            : trim($this->ReadPropertyString('Username'));
+        $username = match ($this->ReadPropertyInteger('Provider')) {
+            self::PROVIDER_GOOGLE => trim($this->ReadAttributeString('GoogleAccount')),
+            self::PROVIDER_ICS    => trim($this->ReadPropertyString('CalendarName')),
+            default               => trim($this->ReadPropertyString('Username'))
+        };
         $this->SetSummary($username !== '' ? $providerName . ' – ' . $username : $providerName);
 
         if (!$this->ReadPropertyBoolean('Active')) {
@@ -506,6 +529,19 @@ class KalenderKonto extends IPSModuleStrict
             );
         }
 
+        if ($provider === self::PROVIDER_ICS) {
+            return new ICalendarFeedProvider(
+                new CalendarHttpClient(
+                    max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
+                    $this->ReadPropertyBoolean('VerifyTLS'),
+                    trim($this->ReadPropertyString('Username')),
+                    $this->ReadPropertyString('Password')
+                ),
+                trim($this->ReadPropertyString('ServerURL')),
+                trim($this->ReadPropertyString('CalendarName'))
+            );
+        }
+
         $serverUrl = $provider === self::PROVIDER_APPLE
             ? self::APPLE_CALDAV_URL
             : trim($this->ReadPropertyString('ServerURL'));
@@ -547,6 +583,10 @@ class KalenderKonto extends IPSModuleStrict
             return 'The CalDAV server URL is missing.';
         }
 
+        if ($provider === self::PROVIDER_ICS && trim($this->ReadPropertyString('ServerURL')) === '') {
+            return 'The iCalendar URL is missing.';
+        }
+
         if ($provider === self::PROVIDER_GOOGLE && !$this->isGoogleConnected()) {
             return 'Google Calendar is not connected yet.';
         }
@@ -556,7 +596,11 @@ class KalenderKonto extends IPSModuleStrict
 
     private function isProviderImplemented(int $provider): bool
     {
-        return in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_GOOGLE], true);
+        return in_array(
+            $provider,
+            [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_GOOGLE, self::PROVIDER_ICS],
+            true
+        );
     }
 
     private function getProviderName(int $provider): string
@@ -587,6 +631,10 @@ class KalenderKonto extends IPSModuleStrict
             }
         } elseif ($exception instanceof GoogleCalendarProviderException) {
             $this->SetStatus($exception->httpStatus === 401
+                ? self::STATUS_AUTHENTICATION_FAILED
+                : self::STATUS_CONNECTION_FAILED);
+        } elseif ($exception instanceof ICalendarFeedProviderException) {
+            $this->SetStatus(in_array($exception->httpStatus, [401, 403], true)
                 ? self::STATUS_AUTHENTICATION_FAILED
                 : self::STATUS_CONNECTION_FAILED);
         } elseif ($exception instanceof OAuthBridgeException) {
@@ -695,6 +743,12 @@ class KalenderKonto extends IPSModuleStrict
         $password = $this->ReadPropertyString('Password');
         if ($password !== '') {
             $message = str_replace($password, '***', $message);
+        }
+        if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS) {
+            $feedUrl = trim($this->ReadPropertyString('ServerURL'));
+            if ($feedUrl !== '') {
+                $message = str_replace($feedUrl, '[iCalendar URL]', $message);
+            }
         }
 
         return $message;

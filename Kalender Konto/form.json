@@ -28,7 +28,7 @@
                     "value": 3
                 },
                 {
-                    "caption": "ICS/Webcal (planned)",
+                    "caption": "ICS/Webcal",
                     "value": 4
                 }
             ]
@@ -38,7 +38,7 @@
             "name": "ServerURL",
             "caption": "Server URL",
             "enabled": false,
-            "validate": "^$|^https?://.+"
+            "validate": "^$|^(https?|webcal)://.+"
         },
         {
             "type": "ValidationTextBox",
@@ -49,6 +49,12 @@
             "type": "PasswordTextBox",
             "name": "Password",
             "caption": "Password"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "CalendarName",
+            "caption": "Calendar name",
+            "visible": false
         },
         {
             "type": "Label",

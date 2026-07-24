@@ -7,15 +7,16 @@ Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die 
 - Apple iCloud über CalDAV und anwendungsspezifisches Passwort
 - Google Calendar über OAuth 2.0 und die Google Calendar API v3
 - generische CalDAV-Server
+- schreibgeschützte iCalendar-Abonnements über HTTP(S)- oder Webcal-URL
 - CalDAV-Discovery von Principal, Calendar Home Set und Kalendern
 - Erkennung von Kalendername, Beschreibung, Farbe und Zugriffsrechten
 - Zwischenspeicherung der gefundenen Kalender
 - zyklische Synchronisation
 - einheitlicher Datenfluss zum Kalender-Konfigurator und zu Kalenderinstanzen
 - Lesen, Erstellen, Bearbeiten und Löschen von Google-Terminen entsprechend der Kalenderrechte
-- vorbereitete Provider-Auswahl für Microsoft 365 und ICS/Webcal
+- vorbereitete Provider-Auswahl für Microsoft 365
 
-Microsoft und ICS/Webcal sind in diesem Entwicklungsstand noch nicht implementiert.
+Microsoft ist in diesem Entwicklungsstand noch nicht implementiert.
 
 ## Voraussetzungen
 
@@ -33,10 +34,11 @@ Unter **Instanz hinzufügen** das Modul **Kalender Konto** auswählen.
 Eigenschaft | Beschreibung
 --- | ---
 Aktiv | Aktiviert die regelmäßige Synchronisation
-Anbieter | Apple iCloud, Google Calendar oder generischer CalDAV-Server
-Server-URL | Bei Apple optional; ansonsten URL des CalDAV-Servers
-Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos
-Passwort | Passwort oder anwendungsspezifisches Passwort
+Anbieter | Apple iCloud, Google Calendar, generischer CalDAV-Server oder ICS/Webcal
+Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers beziehungsweise iCalendar-Feeds
+Kalendername | Optionale Bezeichnung eines iCalendar-Abonnements; ohne Angabe wird `X-WR-CALNAME` verwendet
+Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; bei iCalendar optional
+Passwort | Passwort oder anwendungsspezifisches Passwort; bei iCalendar optional
 Aktualisierungsintervall | Abstand der Kalenderabfragen in Minuten
 TLS-Zertifikat prüfen | Sollte nur zu Diagnosezwecken deaktiviert werden
 Zeitlimit der Anfrage | Maximale Dauer einer HTTP-Anfrage
@@ -58,6 +60,12 @@ Der OAuth-Handler verwendet den Bezeichner `ipskalender_google`. Vor dem ersten 
 Die Google-Anwendung sollte für den Produktivbetrieb veröffentlicht und gegebenenfalls von Google verifiziert werden. Im Google-Testmodus können Refresh-Tokens nach kurzer Zeit ungültig werden.
 
 Kalender mit den Google-Rollen `owner` und `writer` werden als les- und schreibbar erkannt. `reader` wird schreibgeschützt angeboten. Einträge mit ausschließlich `freeBusyReader` werden nicht angelegt, weil sie keine Termindetails liefern.
+
+### ICS/Webcal
+
+Nach Auswahl von **ICS/Webcal** wird die private oder öffentliche iCalendar-Adresse als **iCalendar-URL** eingetragen. `webcal://` wird automatisch über HTTPS abgerufen. Ein optionaler Kalendername überschreibt die im Feed enthaltene Eigenschaft `X-WR-CALNAME`. Benutzername und Passwort werden nur benötigt, wenn der Feed zusätzlich durch HTTP-Authentifizierung geschützt ist.
+
+iCalendar-Abonnements sind grundsätzlich schreibgeschützt. Die Feed-URL kann – etwa bei Googles „Privatadresse im iCal-Format“ – selbst ein Zugangsgeheimnis enthalten und sollte daher wie ein Passwort behandelt werden.
 
 ## Datenfluss
 

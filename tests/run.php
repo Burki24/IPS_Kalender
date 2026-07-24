@@ -5,9 +5,12 @@ declare(strict_types=1);
 use IPSKalender\CalendarHttpClientInterface;
 use IPSKalender\CalendarHttpResponse;
 use IPSKalender\GoogleCalendarProvider;
+use IPSKalender\ICalendarFeedProvider;
+use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\OAuthBridgeClient;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
 
 final class FakeHttpClient implements CalendarHttpClientInterface
@@ -191,5 +194,46 @@ assertSameValue('new-refresh-token', $tokens['refreshToken'], 'The initial refre
 $tokens = $bridge->refreshAccessToken('new-refresh-token');
 assertSameValue('new-refresh-token', $tokens['refreshToken'], 'Refresh responses may omit an unchanged refresh token.');
 assertTrueValue(str_contains($bridge->getAuthorizationUrl('User Name'), 'User%20Name'), 'The licensee must be URL encoded.');
+
+$icalFeed = "BEGIN:VCALENDAR\r\n"
+    . "VERSION:2.0\r\n"
+    . "X-WR-CALNAME:Google Privat\r\n"
+    . "X-APPLE-CALENDAR-COLOR:#34AADCFF\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:inside@example.com\r\n"
+    . "DTSTART:20260720T080000Z\r\n"
+    . "DTEND:20260720T090000Z\r\n"
+    . "SUMMARY:Included event\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:outside@example.com\r\n"
+    . "DTSTART:20260820T080000Z\r\n"
+    . "DTEND:20260820T090000Z\r\n"
+    . "SUMMARY:Excluded event\r\n"
+    . "END:VEVENT\r\n"
+    . "END:VCALENDAR\r\n";
+$feedClient = new FakeHttpClient([
+    new CalendarHttpResponse(200, ['etag' => '"feed-1"'], $icalFeed, 'https://calendar.example/private.ics'),
+    new CalendarHttpResponse(200, ['etag' => '"feed-1"'], $icalFeed, 'https://calendar.example/private.ics')
+]);
+$provider = new ICalendarFeedProvider($feedClient, 'webcal://calendar.example/private.ics');
+$feedCalendars = $provider->getCalendars();
+assertSameValue('Google Privat', $feedCalendars[0]['name'], 'The feed calendar name must be read from X-WR-CALNAME.');
+assertSameValue('#34AADC', $feedCalendars[0]['color'], 'Eight-digit feed colors must be normalized.');
+assertSameValue(false, $feedCalendars[0]['capabilities']['create'], 'iCalendar subscriptions must be read-only.');
+$feedEvents = $provider->getEvents(
+    $feedCalendars[0]['reference'],
+    new DateTimeImmutable('2026-07-19T00:00:00Z'),
+    new DateTimeImmutable('2026-07-22T00:00:00Z')
+);
+assertSameValue(1, count($feedEvents), 'Feed events outside the requested range must be excluded.');
+assertSameValue('Included event', $feedEvents[0]['summary'], 'The event inside the range must be returned.');
+assertSameValue('https://calendar.example/private.ics', $feedClient->requests[0]['url'], 'Webcal URLs must be fetched over HTTPS.');
+try {
+    $provider->createEvent($feedCalendars[0]['reference'], ['summary' => 'Not allowed']);
+    throw new RuntimeException('The read-only feed unexpectedly accepted an event.');
+} catch (ICalendarFeedProviderException $exception) {
+    assertTrueValue(str_contains($exception->getMessage(), 'read-only'), 'Write attempts must explain the read-only limitation.');
+}
 
 echo "All IPS_Kalender tests passed.\n";
