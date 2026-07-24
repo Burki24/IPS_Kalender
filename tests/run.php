@@ -818,6 +818,13 @@ assertTrueValue(
     'The calendar view must defer cross-instance access until the kernel is ready.'
 );
 assertTrueValue(
+    is_string($viewModuleSource)
+        && str_contains($viewModuleSource, "RegisterAttributeString('CalendarSelectionBackup', '[]')")
+        && str_contains($viewModuleSource, 'private function recoverCalendarSelectionFromMessages(): void')
+        && str_contains($viewModuleSource, 'public function SelectAllCalendars(): bool'),
+    'Calendar view selections must survive module reloads and remain recoverable after an update.'
+);
+assertTrueValue(
     is_string($viewTemplateSource)
         && str_contains($viewTemplateSource, "t('CW')")
         && str_contains($viewTemplateSource, 'isoWeekNumber(start)')

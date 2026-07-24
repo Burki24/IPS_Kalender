@@ -197,6 +197,11 @@
             "type": "Button",
             "caption": "Synchronize calendars",
             "onClick": "echo IPSKALVIEW_SynchronizeCalendars($id) ? 'Synchronization successful.' : 'Synchronization failed.';"
+        },
+        {
+            "type": "Button",
+            "caption": "Restore all calendar instances",
+            "onClick": "echo IPSKALVIEW_SelectAllCalendars($id) ? 'Calendar selection restored.' : 'No calendar instances found.';"
         }
     ],
     "status": [

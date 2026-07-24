@@ -33,9 +33,38 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyInteger('IPSViewColorBarWidth', 7);
         $this->RegisterPropertyInteger('IPSViewWeekOrientation', 0);
         $this->RegisterAttributeBoolean('RuntimeReady', false);
+        $this->RegisterAttributeString('CalendarSelectionBackup', '[]');
 
         $this->SetVisualizationType(1);
         $this->RegisterTimer('InitializationTimer', 0, 'IPSKALVIEW_Initialize($_IPS[\'TARGET\']);');
+    }
+
+    public function GetConfigurationForm(): string
+    {
+        $form = json_decode(
+            file_get_contents(__DIR__ . '/form.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        $configured = $this->decodeCalendarConfiguration($this->ReadPropertyString('Calendars'));
+        if ($configured === []) {
+            $backup = $this->decodeCalendarConfiguration($this->ReadAttributeString('CalendarSelectionBackup'));
+            if ($backup !== []) {
+                foreach ($form['elements'] as &$element) {
+                    if (($element['name'] ?? '') === 'Calendars') {
+                        $element['values'] = $backup;
+                        break;
+                    }
+                }
+                unset($element);
+            }
+        }
+
+        return json_encode(
+            $form,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
     }
 
     public function ApplyChanges(): void
@@ -43,6 +72,10 @@ class KalenderAnsicht extends IPSModuleStrict
         parent::ApplyChanges();
 
         $this->WriteAttributeBoolean('RuntimeReady', false);
+        $configured = $this->decodeCalendarConfiguration($this->ReadPropertyString('Calendars'));
+        if ($configured !== []) {
+            $this->storeCalendarSelectionBackup($configured);
+        }
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->SetTimerInterval('InitializationTimer', 0);
         $this->MaintainVariable(
@@ -68,6 +101,7 @@ class KalenderAnsicht extends IPSModuleStrict
             return false;
         }
 
+        $this->recoverCalendarSelectionFromMessages();
         foreach ($this->GetMessageList() as $senderId => $messageIds) {
             foreach ($messageIds as $messageId) {
                 if ((int) $senderId === 0 && (int) $messageId === IPS_KERNELSTARTED) {
@@ -212,6 +246,30 @@ class KalenderAnsicht extends IPSModuleStrict
         }
         $this->broadcastState();
         return $success;
+    }
+
+    public function SelectAllCalendars(): bool
+    {
+        $selection = array_map(
+            static fn(int $instanceId): array => [
+                'InstanceID' => $instanceId,
+                'Enabled'    => true
+            ],
+            IPS_GetInstanceListByModuleID(self::CALENDAR_MODULE_ID)
+        );
+        if ($selection === []) {
+            return false;
+        }
+
+        $encoded = json_encode(
+            $selection,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+        IPS_SetProperty($this->InstanceID, 'Calendars', $encoded);
+        $this->WriteAttributeString('CalendarSelectionBackup', $encoded);
+        IPS_ApplyChanges($this->InstanceID);
+
+        return true;
     }
 
     public function GetAggregatedEvents(): string
@@ -456,10 +514,7 @@ class KalenderAnsicht extends IPSModuleStrict
      */
     private function getSelectedCalendars(): array
     {
-        $configuration = json_decode($this->ReadPropertyString('Calendars'), true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($configuration)) {
-            throw new UnexpectedValueException('The calendar selection is invalid.');
-        }
+        $configuration = $this->effectiveCalendarConfiguration();
 
         $result = [];
         $usedIds = [];
@@ -503,6 +558,76 @@ class KalenderAnsicht extends IPSModuleStrict
         }
 
         return $result;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function effectiveCalendarConfiguration(): array
+    {
+        $configured = $this->decodeCalendarConfiguration($this->ReadPropertyString('Calendars'));
+        return $configured !== []
+            ? $configured
+            : $this->decodeCalendarConfiguration($this->ReadAttributeString('CalendarSelectionBackup'));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function decodeCalendarConfiguration(string $json): array
+    {
+        $configuration = json_decode($json, true, 512, JSON_THROW_ON_ERROR);
+        if (!is_array($configuration)) {
+            throw new UnexpectedValueException('The calendar selection is invalid.');
+        }
+
+        return array_values(array_filter($configuration, 'is_array'));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $selection
+     */
+    private function storeCalendarSelectionBackup(array $selection): void
+    {
+        $this->WriteAttributeString(
+            'CalendarSelectionBackup',
+            json_encode(
+                $selection,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            )
+        );
+    }
+
+    private function recoverCalendarSelectionFromMessages(): void
+    {
+        if ($this->effectiveCalendarConfiguration() !== []) {
+            return;
+        }
+
+        $selection = [];
+        foreach (array_keys($this->GetMessageList()) as $senderId) {
+            $instanceId = (int) $senderId;
+            if ($instanceId <= 0 || !IPS_InstanceExists($instanceId)) {
+                continue;
+            }
+            $instance = IPS_GetInstance($instanceId);
+            if (($instance['ModuleInfo']['ModuleID'] ?? '') !== self::CALENDAR_MODULE_ID) {
+                continue;
+            }
+            $selection[] = [
+                'InstanceID' => $instanceId,
+                'Enabled'    => true
+            ];
+        }
+
+        if ($selection !== []) {
+            $this->SendDebug(
+                'CalendarSelection',
+                'Recovered the calendar selection from existing message subscriptions.',
+                0
+            );
+            $this->storeCalendarSelectionBackup($selection);
+        }
     }
 
     private function findChildByIdent(int $parentId, string $ident): int
