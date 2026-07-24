@@ -1,4 +1,4 @@
-# OpenCalndar
+# OpenCalendar
 
 Folgende Module beinhaltet das IPS_Kalender Repository:
 
