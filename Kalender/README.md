@@ -52,7 +52,7 @@ Anzahl Termine | Integer | Anzahl der aktuell zwischengespeicherten Termine
 Letzte Synchronisation | Integer | Unix-Zeitpunkt der letzten erfolgreichen Abfrage
 Termine | String | JSON-kodierte Liste der Termine
 
-Ein Termin enthält unter anderem `id`, `uid`, `resourceUrl`, `etag`, `summary`, `description`, `location`, `start`, `end`, `startTimestamp`, `endTimestamp`, `allDay`, `status`, `recurrenceRule` und `recurrenceId`.
+Ein Termin enthält unter anderem `id`, `uid`, `resourceUrl`, `etag`, `summary`, `description`, `location`, `start`, `end`, `startTimestamp`, `endTimestamp`, `allDay`, `status`, `recurrenceRule` und `recurrenceId`. Wurde der Titel durch ein ausgewähltes iCalendar-Übersetzungsprofil angepasst, enthält `originalSummary` zusätzlich den unveränderten Originaltitel.
 
 ## PHP-Befehlsreferenz
 

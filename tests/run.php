@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use IPSKalender\CalendarHttpClientInterface;
 use IPSKalender\CalendarHttpResponse;
+use IPSKalender\CalendarEventTranslation;
 use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\ICalendarCodec;
 use IPSKalender\ICalendarFeedProvider;
@@ -13,6 +14,7 @@ use IPSKalender\OAuthBridgeClient;
 use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
+require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/ICalendarSubscriptionProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
@@ -370,9 +372,38 @@ try {
     );
 }
 
+$translationInput = [
+    ['summary' => 'New Moon'],
+    ['summary' => 'First quarter 11:06am'],
+    ['summary' => 'Full Moon 1:30pm'],
+    ['summary' => 'Third Quarter 12:05am'],
+    ['summary' => 'Day 205 of 2026'],
+    ['summary' => 'Team meeting']
+];
+assertSameValue(
+    $translationInput,
+    CalendarEventTranslation::translateEvents($translationInput, CalendarEventTranslation::NONE),
+    'The disabled translation profile must leave all event data unchanged.'
+);
+$translatedEvents = CalendarEventTranslation::translateEvents(
+    $translationInput,
+    CalendarEventTranslation::GOOGLE_PUBLIC_CALENDARS_GERMAN
+);
+assertSameValue('Neumond', $translatedEvents[0]['summary'], 'New Moon must be translated.');
+assertSameValue('Erstes Viertel 11:06 Uhr', $translatedEvents[1]['summary'], 'AM times must use German notation.');
+assertSameValue('Vollmond 13:30 Uhr', $translatedEvents[2]['summary'], 'PM times must use 24-hour notation.');
+assertSameValue('Letztes Viertel 00:05 Uhr', $translatedEvents[3]['summary'], 'Third-quarter midnight times must be converted correctly.');
+assertSameValue('Tag 205 von 2026', $translatedEvents[4]['summary'], 'Day-of-year titles must be translated.');
+assertSameValue('Full Moon 1:30pm', $translatedEvents[2]['originalSummary'], 'Translated events must retain their original title.');
+assertSameValue('Team meeting', $translatedEvents[5]['summary'], 'Unrecognized titles must remain unchanged.');
+assertTrueValue(
+    !isset($translatedEvents[5]['originalSummary']),
+    'Unchanged events must not receive an original title field.'
+);
+
 $secondIcalFeed = str_replace(
     ['Google Privat', '#34AADCFF', 'inside@example.com', 'Included event'],
-    ['Waste collection', '#6D3A38FF', 'waste@example.com', 'Waste collection event'],
+    ['Moon phases', '#6D3A38FF', 'moon@example.com', 'First quarter 11:06am'],
     $icalFeed
 );
 $subscriptionFactoryCalls = [];
@@ -388,13 +419,14 @@ $subscriptionProvider = new ICalendarSubscriptionProvider(
             'updateInterval' => 15
         ],
         [
-            'url'            => 'https://calendar.example/waste.ics',
-            'name'           => 'Waste',
-            'username'       => 'feed-user',
-            'password'       => 'feed-password',
-            'color'          => '',
-            'updateSchedule' => SynchronizationSchedule::WEEKLY,
-            'updateInterval' => 15
+            'url'                => 'https://calendar.example/waste.ics',
+            'name'               => 'Waste',
+            'username'           => 'feed-user',
+            'password'           => 'feed-password',
+            'color'              => '',
+            'translationProfile' => CalendarEventTranslation::GOOGLE_PUBLIC_CALENDARS_GERMAN,
+            'updateSchedule'     => SynchronizationSchedule::WEEKLY,
+            'updateInterval'     => 15
         ]
     ],
     static function (array $subscription) use (
@@ -434,9 +466,14 @@ $subscriptionEvents = $subscriptionProvider->getEvents(
 );
 assertSameValue(1, count($subscriptionEvents), 'The selected subscription must return its own events.');
 assertSameValue(
-    'Waste collection event',
+    'Erstes Viertel 11:06 Uhr',
     $subscriptionEvents[0]['summary'],
-    'Calendar references must be routed to the matching subscription.'
+    'Calendar references must be routed through the selected title translation profile.'
+);
+assertSameValue(
+    'First quarter 11:06am',
+    $subscriptionEvents[0]['originalSummary'],
+    'Translated subscription events must preserve their original title.'
 );
 assertSameValue(
     'feed-user',
@@ -462,6 +499,24 @@ try {
     assertTrueValue(
         str_contains($exception->getMessage(), 'more than once'),
         'Duplicate subscription URLs must produce an actionable validation error.'
+    );
+}
+try {
+    new ICalendarSubscriptionProvider(
+        [[
+            'url'                => 'https://calendar.example/invalid-translation.ics',
+            'translationProfile' => 999
+        ]],
+        static fn(array $subscription): ICalendarFeedProvider => new ICalendarFeedProvider(
+            new FakeHttpClient([]),
+            (string) $subscription['url']
+        )
+    );
+    throw new RuntimeException('An invalid title translation profile was unexpectedly accepted.');
+} catch (InvalidArgumentException $exception) {
+    assertTrueValue(
+        str_contains($exception->getMessage(), 'translation profile'),
+        'Invalid title translation profiles must produce an actionable validation error.'
     );
 }
 

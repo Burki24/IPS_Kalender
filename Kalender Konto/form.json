@@ -57,6 +57,22 @@
             "visible": false
         },
         {
+            "type": "Select",
+            "name": "ICalendarTranslationProfile",
+            "caption": "Title translation",
+            "visible": false,
+            "options": [
+                {
+                    "caption": "None",
+                    "value": 0
+                },
+                {
+                    "caption": "Google public calendars - German",
+                    "value": 1
+                }
+            ]
+        },
+        {
             "type": "Label",
             "name": "ICalendarSubscriptionsHint",
             "caption": "Add further read-only iCalendar subscriptions here. The single feed configured above remains available for compatibility.",
@@ -116,6 +132,25 @@
                     "add": "",
                     "edit": {
                         "type": "PasswordTextBox"
+                    }
+                },
+                {
+                    "caption": "Title translation",
+                    "name": "TranslationProfile",
+                    "width": "190px",
+                    "add": 0,
+                    "edit": {
+                        "type": "Select",
+                        "options": [
+                            {
+                                "caption": "None",
+                                "value": 0
+                            },
+                            {
+                                "caption": "Google public calendars - German",
+                                "value": 1
+                            }
+                        ]
                     }
                 },
                 {

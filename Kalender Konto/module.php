@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use IPSKalender\CalendarHttpClient;
+use IPSKalender\CalendarEventTranslation;
 use IPSKalender\CalendarProviderInterface;
 use IPSKalender\CalDAVProvider;
 use IPSKalender\CalDAVProviderException;
@@ -17,6 +18,7 @@ use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
+require_once __DIR__ . '/../libs/CalendarEventTranslation.php';
 require_once __DIR__ . '/../libs/CalDAVProvider.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
@@ -52,6 +54,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
         $this->RegisterPropertyString('CalendarName', '');
+        $this->RegisterPropertyInteger('ICalendarTranslationProfile', CalendarEventTranslation::NONE);
         $this->RegisterPropertyString('ICalendarFeeds', '[]');
         $this->RegisterPropertyInteger('UpdateSchedule', SynchronizationSchedule::CUSTOM);
         $this->RegisterPropertyInteger('UpdateInterval', 15);
@@ -93,7 +96,7 @@ class KalenderKonto extends IPSModuleStrict
                 }
             } elseif (in_array($name, ['Username', 'Password'], true)) {
                 $element['visible'] = $isPasswordProvider;
-            } elseif ($name === 'CalendarName') {
+            } elseif (in_array($name, ['CalendarName', 'ICalendarTranslationProfile'], true)) {
                 $element['visible'] = $isIcs;
             } elseif (in_array($name, ['ICalendarFeeds', 'ICalendarSubscriptionsHint'], true)) {
                 $element['visible'] = $isIcs;
@@ -135,6 +138,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->UpdateFormField('Username', 'visible', $isPasswordProvider);
         $this->UpdateFormField('Password', 'visible', $isPasswordProvider);
         $this->UpdateFormField('CalendarName', 'visible', $isIcs);
+        $this->UpdateFormField('ICalendarTranslationProfile', 'visible', $isIcs);
         $this->UpdateFormField('ICalendarFeeds', 'visible', $isIcs);
         $this->UpdateFormField('ICalendarSubscriptionsHint', 'visible', $isIcs);
         $this->UpdateFormField(
@@ -750,6 +754,14 @@ class KalenderKonto extends IPSModuleStrict
                         trim((string) ($subscription['name'] ?? ''))
                     );
                 }
+                if (!CalendarEventTranslation::isValidProfile(
+                    (int) ($subscription['translationProfile'] ?? -1)
+                )) {
+                    return sprintf(
+                        'The title translation profile for iCalendar subscription "%s" is invalid.',
+                        trim((string) ($subscription['name'] ?? ''))
+                    );
+                }
             }
         }
 
@@ -933,6 +945,7 @@ class KalenderKonto extends IPSModuleStrict
      *     username: string,
      *     password: string,
      *     color: string,
+     *     translationProfile: int,
      *     updateSchedule: int,
      *     updateInterval: int
      * }>
@@ -960,17 +973,22 @@ class KalenderKonto extends IPSModuleStrict
                 }
                 $url = trim((string) ($feed['URL'] ?? $feed['url'] ?? ''));
                 $subscriptions[] = [
-                    'url'            => $url,
-                    'name'           => trim((string) ($feed['Name'] ?? $feed['name'] ?? '')),
-                    'username'       => trim((string) ($feed['Username'] ?? $feed['username'] ?? '')),
-                    'password'       => (string) ($feed['Password'] ?? $feed['password'] ?? ''),
-                    'color'          => trim((string) ($feed['Color'] ?? $feed['color'] ?? '')),
-                    'updateSchedule' => (int) (
+                    'url'                => $url,
+                    'name'               => trim((string) ($feed['Name'] ?? $feed['name'] ?? '')),
+                    'username'           => trim((string) ($feed['Username'] ?? $feed['username'] ?? '')),
+                    'password'           => (string) ($feed['Password'] ?? $feed['password'] ?? ''),
+                    'color'              => trim((string) ($feed['Color'] ?? $feed['color'] ?? '')),
+                    'translationProfile' => (int) (
+                        $feed['TranslationProfile']
+                        ?? $feed['translationProfile']
+                        ?? CalendarEventTranslation::NONE
+                    ),
+                    'updateSchedule'     => (int) (
                         $feed['UpdateSchedule']
                         ?? $feed['updateSchedule']
                         ?? $this->ReadPropertyInteger('UpdateSchedule')
                     ),
-                    'updateInterval' => (int) (
+                    'updateInterval'     => (int) (
                         $feed['UpdateInterval']
                         ?? $feed['updateInterval']
                         ?? $this->ReadPropertyInteger('UpdateInterval')
@@ -985,13 +1003,14 @@ class KalenderKonto extends IPSModuleStrict
             && $legacyUrl !== self::APPLE_CALDAV_URL
             && !isset($configuredUrls[$this->iCalendarUrlKey($legacyUrl)])) {
             array_unshift($subscriptions, [
-                'url'            => $legacyUrl,
-                'name'           => trim($this->ReadPropertyString('CalendarName')),
-                'username'       => trim($this->ReadPropertyString('Username')),
-                'password'       => $this->ReadPropertyString('Password'),
-                'color'          => '',
-                'updateSchedule' => $this->ReadPropertyInteger('UpdateSchedule'),
-                'updateInterval' => $this->ReadPropertyInteger('UpdateInterval')
+                'url'                => $legacyUrl,
+                'name'               => trim($this->ReadPropertyString('CalendarName')),
+                'username'           => trim($this->ReadPropertyString('Username')),
+                'password'           => $this->ReadPropertyString('Password'),
+                'color'              => '',
+                'translationProfile' => $this->ReadPropertyInteger('ICalendarTranslationProfile'),
+                'updateSchedule'     => $this->ReadPropertyInteger('UpdateSchedule'),
+                'updateInterval'     => $this->ReadPropertyInteger('UpdateInterval')
             ]);
         }
 

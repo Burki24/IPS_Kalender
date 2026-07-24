@@ -40,7 +40,7 @@ Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers. Bei ICS/Webc
 Kalendername | Optionale Bezeichnung des bisherigen einzelnen iCalendar-Abonnements
 Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; beim bisherigen einzelnen iCalendar-Abonnement optional
 Passwort | Passwort oder anwendungsspezifisches Passwort; beim bisherigen einzelnen iCalendar-Abonnement optional
-iCalendar-Abonnements | Liste zusätzlicher Feeds mit Aktivierung, Name, URL, optionalen Zugangsdaten, Aktualisierungsplan und optionaler Farbe
+iCalendar-Abonnements | Liste zusätzlicher Feeds mit Aktivierung, Name, URL, optionalen Zugangsdaten, Titelübersetzung, Aktualisierungsplan und optionaler Farbe
 Aktualisierungsplan | Vorgegebener Rhythmus von fünf Minuten bis jährlich oder ausschließlich manuelle Synchronisation; bei ICS/Webcal steuert er die erneute Kontosuche
 Benutzerdefiniertes Intervall | Eigener Abstand in Minuten; wird nur beim Zeitplan „Benutzerdefiniertes Intervall“ angezeigt
 TLS-Zertifikat prüfen | Sollte nur zu Diagnosezwecken deaktiviert werden
@@ -76,6 +76,7 @@ verwaltet werden. Jeder Eintrag besitzt:
 - Kalendername
 - HTTP(S)- oder Webcal-URL
 - optionalen Benutzernamen und optionales Passwort für HTTP-Authentifizierung
+- optionale, profilbasierte Titelübersetzung
 - eigenen Aktualisierungsplan
 - benutzerdefiniertes Intervall für den entsprechenden Zeitplantyp
 - optionale Kalenderfarbe im Format `#RRGGBB`
@@ -84,8 +85,17 @@ Bleibt die Farbe leer, verwendet das Modul – sofern vorhanden – die Farbe au
 dem Feed. `webcal://` wird automatisch über HTTPS abgerufen. Ein eingetragener
 Kalendername überschreibt die im Feed enthaltene Eigenschaft `X-WR-CALNAME`.
 
-Die bisherigen Felder **iCalendar-URL**, **Kalendername**, **Benutzername** und
-**Passwort** bleiben für bereits eingerichtete Einzel-Feed-Konten
+Das Profil **Öffentliche Google-Kalender - Deutsch** übersetzt ausschließlich
+bekannte englische Termintitel der Google-Kalender für Mondphasen und
+Kalendertage. Beispielsweise werden `Full Moon` zu `Vollmond` und
+`Day 205 of 2026` zu `Tag 205 von 2026`. Eine gegebenenfalls angehängte
+englische Uhrzeit wird in das deutsche 24-Stunden-Format umgewandelt. Andere
+Termintitel bleiben unverändert. Bei übersetzten Terminen enthält
+`originalSummary` weiterhin den Originaltitel. Der heruntergeladene Feed und
+sein persistenter Cache werden nicht verändert.
+
+Die bisherigen Felder **iCalendar-URL**, **Kalendername**, **Benutzername**,
+**Passwort** und **Titelübersetzung** bleiben für bereits eingerichtete Einzel-Feed-Konten
 rückwärtskompatibel. Der dort konfigurierte Feed wird zusätzlich zu den
 Listeneinträgen angeboten. Ist dieselbe URL bereits in der Liste enthalten,
 wird sie nicht doppelt angelegt.
