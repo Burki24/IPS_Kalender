@@ -310,7 +310,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 $html
             );
             foreach ([
-                'Agenda', '3 Days', 'Week', 'Month', 'Previous', 'Today', 'Next', 'Refresh',
+                'Agenda', '3 Days', 'Week', 'Month', 'CW', 'Previous', 'Today', 'Next', 'Refresh',
                 'No calendars selected', 'Select at least one calendar in the instance configuration.',
                 'No events', 'There are no events in this period.', 'All day', 'Untitled event',
                 'more', 'Create event', 'Event details', 'Calendar', 'Title', 'Start', 'End', 'Location',

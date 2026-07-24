@@ -708,6 +708,7 @@ assertSameValue(
 
 $calendarModuleSource = file_get_contents(__DIR__ . '/../Kalender/module.php');
 $viewModuleSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.php');
+$viewTemplateSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.html');
 assertTrueValue(
     is_string($calendarModuleSource)
         && str_contains($calendarModuleSource, 'RegisterMessage(0, IPS_KERNELSTARTED)')
@@ -723,6 +724,13 @@ assertTrueValue(
         && str_contains($viewModuleSource, "RegisterAttributeBoolean('RuntimeReady', false)")
         && str_contains($viewModuleSource, 'IPS_GetKernelRunlevel() !== KR_READY'),
     'The calendar view must defer cross-instance access until the kernel is ready.'
+);
+assertTrueValue(
+    is_string($viewTemplateSource)
+        && str_contains($viewTemplateSource, "t('CW')")
+        && str_contains($viewTemplateSource, 'isoWeekNumber(start)')
+        && str_contains($viewTemplateSource, 'Date.UTC'),
+    'The weekly tile and IPSView title must include an ISO calendar week.'
 );
 
 echo "All IPS_Kalender tests passed.\n";

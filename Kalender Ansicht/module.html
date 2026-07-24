@@ -592,7 +592,7 @@
         } else if (activeView === 'week') {
             const start = startOfWeek(cursorDate);
             const end = addDays(start, 6);
-            periodTitle.textContent = formatRange(start, end);
+            periodTitle.textContent = `${t('CW')} ${isoWeekNumber(start)} · ${formatRange(start, end)}`;
         } else if (activeView === 'threeDays') {
             const days = getThreeVisibleDays(cursorDate);
             periodTitle.textContent = formatRange(days[0], days[days.length - 1]);
@@ -1028,6 +1028,13 @@
     function element(tag, className) { const node = document.createElement(tag); node.className = className; return node; }
     function startOfDay(date) { return new Date(date.getFullYear(), date.getMonth(), date.getDate()); }
     function startOfWeek(date) { const result = startOfDay(date); const day = result.getDay() || 7; result.setDate(result.getDate() - day + 1); return result; }
+    function isoWeekNumber(date) {
+        const target = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const weekday = target.getUTCDay() || 7;
+        target.setUTCDate(target.getUTCDate() + 4 - weekday);
+        const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
+        return Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+    }
     function addDays(date, days) { const result = new Date(date); result.setDate(result.getDate() + days); return result; }
     function isWeekend(date) { return date.getDay() === 0 || date.getDay() === 6; }
     function isToday(date) { return dayKey(date) === dayKey(new Date()); }
