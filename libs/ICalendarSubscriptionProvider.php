@@ -25,6 +25,8 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
     private Closure $providerFactory;
 
     /**
+     * Creates a read-only provider that exposes multiple independent iCalendar subscriptions.
+     *
      * @param list<array<string, mixed>> $subscriptions
      * @param callable(array<string, mixed>): ICalendarFeedProvider $providerFactory
      */
@@ -51,6 +53,7 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
         }
     }
 
+    /** @inheritDoc */
     public function testConnection(): array
     {
         $eventCount = 0;
@@ -67,6 +70,7 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function getCalendars(): array
     {
         $calendars = [];
@@ -94,6 +98,7 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
         return $calendars;
     }
 
+    /** @inheritDoc */
     public function getEvents(string $calendarReference, DateTimeImmutable $start, DateTimeImmutable $end): array
     {
         $subscription = $this->resolveSubscription($calendarReference);
@@ -104,11 +109,13 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
         );
     }
 
+    /** @inheritDoc */
     public function createEvent(string $calendarReference, array $event): array
     {
         throw new ICalendarFeedProviderException('iCalendar subscriptions are read-only.');
     }
 
+    /** @inheritDoc */
     public function updateEvent(
         string $calendarReference,
         string $eventReference,
@@ -119,6 +126,7 @@ final class ICalendarSubscriptionProvider implements CalendarProviderInterface
         throw new ICalendarFeedProviderException('iCalendar subscriptions are read-only.');
     }
 
+    /** @inheritDoc */
     public function deleteEvent(
         string $calendarReference,
         string $eventReference,

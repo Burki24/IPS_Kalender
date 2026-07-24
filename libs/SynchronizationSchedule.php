@@ -25,11 +25,17 @@ final class SynchronizationSchedule
     private const MAX_DIRECT_INTERVAL_MINUTES = 10_080;
     private const MAX_CUSTOM_INTERVAL_MINUTES = 525_600;
 
+    /**
+     * Checks whether a schedule identifier is supported.
+     */
     public static function isValid(int $schedule): bool
     {
         return $schedule >= self::CUSTOM && $schedule <= self::MANUAL;
     }
 
+    /**
+     * Returns the Symcon timer interval in milliseconds for a synchronization schedule.
+     */
     public static function timerInterval(int $schedule, int $customMinutes): int
     {
         if ($schedule === self::MANUAL) {
@@ -47,6 +53,9 @@ final class SynchronizationSchedule
         return $minutes * 60 * 1000;
     }
 
+    /**
+     * Determines whether synchronization is due at the supplied or current Unix timestamp.
+     */
     public static function isDue(
         int $schedule,
         int $customMinutes,

@@ -7,6 +7,11 @@ use IPSKalender\GoogleOAuthException;
 
 trait KalenderKontoGoogleOAuthTrait
 {
+    /**
+     * Starts the Google OAuth flow and returns the authorization URL.
+     *
+     * @return string Authorization URL, or a localized error message when startup fails.
+     */
     public function ConnectGoogle(): string
     {
         try {
@@ -28,6 +33,11 @@ trait KalenderKontoGoogleOAuthTrait
         }
     }
 
+    /**
+     * Returns the Symcon Connect callback URI used for Google OAuth.
+     *
+     * @return string Redirect URI, or a localized error message when it is unavailable.
+     */
     public function GetGoogleRedirectURI(): string
     {
         try {
@@ -37,6 +47,11 @@ trait KalenderKontoGoogleOAuthTrait
         }
     }
 
+    /**
+     * Revokes the stored Google authorization when possible and clears local OAuth state.
+     *
+     * @return bool Always true after local Google authorization data has been cleared.
+     */
     public function DisconnectGoogle(): bool
     {
         $refreshToken = $this->ReadAttributeString('GoogleRefreshToken');

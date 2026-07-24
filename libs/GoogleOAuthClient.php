@@ -23,6 +23,9 @@ final class GoogleOAuthClient
         'https://www.googleapis.com/auth/calendar.events'
     ];
 
+    /**
+     * Creates a Google OAuth client for the configured application credentials and callback URI.
+     */
     public function __construct(
         private readonly CalendarHttpClientInterface $httpClient,
         private readonly string $clientId,
@@ -41,6 +44,9 @@ final class GoogleOAuthClient
         }
     }
 
+    /**
+     * Builds the Google OAuth authorization URL for the supplied anti-forgery state value.
+     */
     public function getAuthorizationUrl(string $state): string
     {
         if (trim($state) === '') {
@@ -65,6 +71,8 @@ final class GoogleOAuthClient
     }
 
     /**
+     * Exchanges an authorization code for Google OAuth tokens.
+     *
      * @return array{accessToken: string, refreshToken: string, expiresAt: int}
      */
     public function exchangeAuthorizationCode(string $code): array
@@ -84,6 +92,8 @@ final class GoogleOAuthClient
     }
 
     /**
+     * Refreshes a Google OAuth access token using a previously stored refresh token.
+     *
      * @return array{accessToken: string, refreshToken: string, expiresAt: int}
      */
     public function refreshAccessToken(string $refreshToken): array

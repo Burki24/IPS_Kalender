@@ -14,6 +14,8 @@ final class ICalendarRecurrence
     private const MAX_GENERATED_DAYS = 200_000;
 
     /**
+     * Expands recurring event masters, exceptions, and overrides within a time range.
+     *
      * @param list<array<string, mixed>> $events
      * @return list<array<string, mixed>>
      */

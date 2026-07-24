@@ -16,6 +16,14 @@ final class CalDAVOriginPolicy
     private readonly int $port;
     private readonly bool $allowICloudShards;
 
+    /**
+     * Defines the trusted origin for a CalDAV account.
+     *
+     * iCloud shard hosts are permitted only when the configured server itself belongs to
+     * the official iCloud CalDAV host family over HTTPS on port 443.
+     *
+     * @param string $serverUrl Configured CalDAV server URL.
+     */
     public function __construct(string $serverUrl)
     {
         $serverUrl = trim($serverUrl);
@@ -51,11 +59,17 @@ final class CalDAVOriginPolicy
             && self::isICloudCalDAVHost($host);
     }
 
+    /**
+     * Returns the normalized server URL used to establish the trust boundary.
+     */
     public function getServerUrl(): string
     {
         return $this->serverUrl;
     }
 
+    /**
+     * Checks whether an absolute URL belongs to an origin trusted for this account.
+     */
     public function isAllowedUrl(string $url): bool
     {
         $parts = parse_url(trim($url));
@@ -83,6 +97,14 @@ final class CalDAVOriginPolicy
             && self::isICloudCalDAVHost($host);
     }
 
+    /**
+     * Resolves a relative DAV reference against an absolute base URL.
+     *
+     * The returned URL is not implicitly trusted; callers must validate it with isAllowedUrl().
+     *
+     * @param string $baseUrl   Absolute base URL.
+     * @param string $reference Absolute or relative DAV reference.
+     */
     public function resolveUrl(string $baseUrl, string $reference): string
     {
         $reference = trim($reference);

@@ -9,12 +9,17 @@ final class CalendarEventTranslation
     public const NONE = 0;
     public const GOOGLE_PUBLIC_CALENDARS_GERMAN = 1;
 
+    /**
+     * Checks whether a title translation profile is supported.
+     */
     public static function isValidProfile(int $profile): bool
     {
         return in_array($profile, [self::NONE, self::GOOGLE_PUBLIC_CALENDARS_GERMAN], true);
     }
 
     /**
+     * Applies the selected title translation profile to normalized events.
+     *
      * @param list<array<string, mixed>> $events
      * @return list<array<string, mixed>>
      */

@@ -16,6 +16,9 @@ class Kalender extends IPSModuleStrict
     private const STATUS_INVALID_RESPONSE = 203;
     private const STATUS_WRITE_CONFLICT = 204;
 
+    /**
+     * Registers properties, attributes, variables, and timers for the calendar instance.
+     */
     public function Create(): void
     {
         parent::Create();
@@ -49,6 +52,11 @@ class Kalender extends IPSModuleStrict
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKAL_ScheduledSynchronize($_IPS[\'TARGET\']);');
     }
 
+    /**
+     * Builds the configuration form with schedule-dependent field visibility.
+     *
+     * @return string JSON-encoded configuration form.
+     */
     public function GetConfigurationForm(): string
     {
         $form = json_decode(
@@ -72,6 +80,9 @@ class Kalender extends IPSModuleStrict
         );
     }
 
+    /**
+     * Updates the custom interval field for the selected synchronization schedule.
+     */
     public function UpdateScheduleForm(int $schedule): void
     {
         $this->UpdateFormField(
@@ -81,6 +92,12 @@ class Kalender extends IPSModuleStrict
         );
     }
 
+    /**
+     * Handles actions triggered from the instance configuration form.
+     *
+     * @param string $Ident Action identifier supplied by Symcon.
+     * @param mixed  $Value Action value supplied by Symcon.
+     */
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
@@ -97,6 +114,9 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Applies the current configuration and schedules runtime initialization.
+     */
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -125,6 +145,11 @@ class Kalender extends IPSModuleStrict
         $this->scheduleInitialization();
     }
 
+    /**
+     * Handles Symcon messages relevant to calendar initialization.
+     *
+     * @param array<int, mixed> $Data Message payload supplied by Symcon.
+     */
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         if ($SenderID === 0 && $Message === IPS_KERNELSTARTED) {
@@ -132,6 +157,11 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Initializes runtime state, metadata, and synchronization timers after the kernel is ready.
+     *
+     * @return bool True when initialization completed.
+     */
     public function Initialize(): bool
     {
         $this->SetTimerInterval('InitializationTimer', 0);
@@ -155,6 +185,11 @@ class Kalender extends IPSModuleStrict
         return true;
     }
 
+    /**
+     * Runs synchronization when the configured schedule is due.
+     *
+     * @return bool True when no synchronization was due or synchronization succeeded.
+     */
     public function ScheduledSynchronize(): bool
     {
         if (!SynchronizationSchedule::isDue(
@@ -168,6 +203,12 @@ class Kalender extends IPSModuleStrict
         return $this->Synchronize();
     }
 
+    /**
+     * Receives calendar metadata notifications from the parent account instance.
+     *
+     * @param string $JSONString JSON-encoded parent notification.
+     * @return string Empty response required by the Symcon data flow.
+     */
     public function ReceiveData(string $JSONString): string
     {
         try {
@@ -183,6 +224,11 @@ class Kalender extends IPSModuleStrict
         return '';
     }
 
+    /**
+     * Synchronizes the local event cache with the configured calendar provider.
+     *
+     * @return bool True when synchronization succeeded.
+     */
     public function Synchronize(): bool
     {
         if (!$this->ReadPropertyBoolean('Active')) {
@@ -203,11 +249,22 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Returns the cached calendar events.
+     *
+     * @return string JSON-encoded event list.
+     */
     public function GetEvents(): string
     {
         return $this->ReadAttributeString('CachedEvents');
     }
 
+    /**
+     * Creates an event in the configured calendar.
+     *
+     * @param string $EventJSON JSON-encoded event data.
+     * @return string JSON-encoded operation result.
+     */
     public function CreateEvent(string $EventJSON): string
     {
         try {
@@ -221,6 +278,12 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Updates an existing event in the configured calendar.
+     *
+     * @param string $EventJSON JSON-encoded event metadata and changes.
+     * @return string JSON-encoded operation result.
+     */
     public function UpdateEvent(string $EventJSON): string
     {
         try {
@@ -253,6 +316,12 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Deletes an event from the configured calendar.
+     *
+     * @param string $EventJSON JSON-encoded event metadata.
+     * @return bool True when the event was deleted successfully.
+     */
     public function DeleteEvent(string $EventJSON): bool
     {
         try {
@@ -276,6 +345,9 @@ class Kalender extends IPSModuleStrict
         }
     }
 
+    /**
+     * Clears cached events and synchronization metadata.
+     */
     public function ClearCache(): void
     {
         $this->storeEvents([]);
@@ -284,6 +356,11 @@ class Kalender extends IPSModuleStrict
         $this->WriteAttributeString('LastError', '');
     }
 
+    /**
+     * Returns runtime metadata and synchronization status for this calendar.
+     *
+     * @return string JSON-encoded calendar status.
+     */
     public function GetCalendarStatus(): string
     {
         if ($this->isRuntimeReady()) {

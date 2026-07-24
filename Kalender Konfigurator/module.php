@@ -9,6 +9,9 @@ class KalenderKonfigurator extends IPSModuleStrict
 
     private const STATUS_DISCOVERY_FAILED = 201;
 
+    /**
+     * Registers the configurator cache and error state.
+     */
     public function Create(): void
     {
         parent::Create();
@@ -17,6 +20,9 @@ class KalenderKonfigurator extends IPSModuleStrict
         $this->RegisterAttributeString('LastError', '');
     }
 
+    /**
+     * Applies the configurator configuration and marks the instance active.
+     */
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -24,6 +30,11 @@ class KalenderKonfigurator extends IPSModuleStrict
         $this->SetStatus(IS_ACTIVE);
     }
 
+    /**
+     * Builds the configurator form from calendars discovered through the parent account.
+     *
+     * @return string JSON-encoded configuration form.
+     */
     public function GetConfigurationForm(): string
     {
         $form = json_decode(
@@ -57,6 +68,12 @@ class KalenderKonfigurator extends IPSModuleStrict
         );
     }
 
+    /**
+     * Handles configurator form actions.
+     *
+     * @param string $Ident Action identifier supplied by Symcon.
+     * @param mixed  $Value Action value supplied by Symcon.
+     */
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
@@ -75,6 +92,11 @@ class KalenderKonfigurator extends IPSModuleStrict
         }
     }
 
+    /**
+     * Refreshes the discovered calendar list and updates the open configuration form.
+     *
+     * @return string Localized discovery result message.
+     */
     public function RefreshCalendars(): string
     {
         try {

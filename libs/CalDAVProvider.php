@@ -19,6 +19,9 @@ require_once __DIR__ . '/ICalendarCodec.php';
 
 final class CalDAVProviderException extends RuntimeException
 {
+    /**
+     * Creates a CalDAV provider exception with an optional HTTP status code.
+     */
     public function __construct(string $message, public readonly int $httpStatus = 0)
     {
         parent::__construct($message);
@@ -33,6 +36,13 @@ final class CalDAVProvider implements CalendarProviderInterface
 
     private readonly CalDAVOriginPolicy $originPolicy;
 
+    /**
+     * Creates a CalDAV provider bound to the supplied server trust policy.
+     *
+     * @param CalendarHttpClientInterface $httpClient   HTTP transport used for DAV requests.
+     * @param string                      $serverUrl    Configured CalDAV server URL.
+     * @param CalDAVOriginPolicy|null     $originPolicy Optional preconfigured origin policy.
+     */
     public function __construct(
         private readonly CalendarHttpClientInterface $httpClient,
         string $serverUrl,
@@ -41,6 +51,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         $this->originPolicy = $originPolicy ?? new CalDAVOriginPolicy($serverUrl);
     }
 
+    /** @inheritDoc */
     public function testConnection(): array
     {
         $calendars = $this->getCalendars();
@@ -52,6 +63,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function getCalendars(): array
     {
         $entryUrls = $this->getEntryUrls();
@@ -71,6 +83,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         throw $lastException ?? new CalDAVProviderException('CalDAV discovery failed.');
     }
 
+    /** @inheritDoc */
     public function getEvents(string $calendarUrl, DateTimeImmutable $start, DateTimeImmutable $end): array
     {
         if ($end <= $start) {
@@ -136,6 +149,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         return $events;
     }
 
+    /** @inheritDoc */
     public function createEvent(string $calendarUrl, array $event): array
     {
         $calendarUrl = $this->normalizeAbsoluteUrl($calendarUrl);
@@ -161,6 +175,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function updateEvent(
         string $calendarUrl,
         string $resourceUrl,
@@ -198,6 +213,7 @@ final class CalDAVProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function deleteEvent(
         string $calendarUrl,
         string $resourceUrl,

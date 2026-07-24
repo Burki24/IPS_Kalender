@@ -11,7 +11,9 @@ require_once __DIR__ . '/CalDAVOriginPolicy.php';
 final class CalendarHttpResponse
 {
     /**
-     * @param array<string, string> $headers
+     * Represents an immutable HTTP response returned to calendar providers.
+     *
+     * @param array<string, string> $headers Normalized response headers keyed by lowercase name.
      */
     public function __construct(
         public readonly int $statusCode,
@@ -29,7 +31,9 @@ final class CalendarHttpException extends RuntimeException
 interface CalendarHttpClientInterface
 {
     /**
-     * @param array<string, string> $headers
+     * Executes an HTTP request and returns the normalized response.
+     *
+     * @param array<string, string> $headers Request headers keyed by header name.
      */
     public function request(string $method, string $url, array $headers = [], string $body = ''): CalendarHttpResponse;
 }
@@ -38,6 +42,15 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
 {
     private const MAX_REDIRECTS = 5;
 
+    /**
+     * Creates an HTTP client for calendar provider requests.
+     *
+     * @param int                     $timeout      Request timeout in seconds.
+     * @param bool                    $verifyTLS    Whether TLS certificates and hostnames must be verified.
+     * @param string                  $username     Optional HTTP authentication username.
+     * @param string                  $password     Optional HTTP authentication password.
+     * @param CalDAVOriginPolicy|null $originPolicy Optional CalDAV trust policy used for guarded redirects.
+     */
     public function __construct(
         private readonly int $timeout,
         private readonly bool $verifyTLS,
@@ -48,7 +61,9 @@ final class CalendarHttpClient implements CalendarHttpClientInterface
     }
 
     /**
-     * @param array<string, string> $headers
+     * Executes an HTTP request while enforcing the configured CalDAV redirect policy when present.
+     *
+     * @param array<string, string> $headers Request headers keyed by header name.
      */
     public function request(string $method, string $url, array $headers = [], string $body = ''): CalendarHttpResponse
     {

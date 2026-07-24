@@ -54,6 +54,9 @@ class KalenderKonto extends IPSModuleStrict
     private const STATUS_PROVIDER_NOT_IMPLEMENTED = 204;
     private const STATUS_INVALID_RESPONSE = 205;
 
+    /**
+     * Registers account properties, provider state, cache attributes, timers, and OAuth hook.
+     */
     public function Create(): void
     {
         parent::Create();
@@ -86,6 +89,11 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterHook($this->googleOAuthHookAddress());
     }
 
+    /**
+     * Builds the provider-specific account configuration form.
+     *
+     * @return string JSON-encoded configuration form.
+     */
     public function GetConfigurationForm(): string
     {
         $form = json_decode(
@@ -153,6 +161,9 @@ class KalenderKonto extends IPSModuleStrict
         );
     }
 
+    /**
+     * Updates provider-specific form fields when the provider selection changes.
+     */
     public function UpdateProviderForm(int $provider): void
     {
         $isPasswordProvider = in_array($provider, [self::PROVIDER_APPLE, self::PROVIDER_CALDAV, self::PROVIDER_ICS], true);
@@ -215,6 +226,9 @@ class KalenderKonto extends IPSModuleStrict
         $this->UpdateFormField('ServerURL', 'enabled', false);
     }
 
+    /**
+     * Updates the custom interval field for the selected synchronization schedule.
+     */
     public function UpdateScheduleForm(int $schedule): void
     {
         $this->UpdateFormField(
@@ -224,6 +238,12 @@ class KalenderKonto extends IPSModuleStrict
         );
     }
 
+    /**
+     * Handles actions triggered from the account configuration form.
+     *
+     * @param string $Ident Action identifier supplied by Symcon.
+     * @param mixed  $Value Action value supplied by Symcon.
+     */
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
@@ -264,6 +284,9 @@ class KalenderKonto extends IPSModuleStrict
         }
     }
 
+    /**
+     * Applies account configuration, validates the provider, and configures synchronization.
+     */
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -307,6 +330,11 @@ class KalenderKonto extends IPSModuleStrict
         $this->SetStatus(IS_ACTIVE);
     }
 
+    /**
+     * Runs account synchronization when the configured schedule is due.
+     *
+     * @return bool True when no synchronization was due or synchronization succeeded.
+     */
     public function ScheduledSynchronize(): bool
     {
         if (!SynchronizationSchedule::isDue(
@@ -320,6 +348,11 @@ class KalenderKonto extends IPSModuleStrict
         return $this->Synchronize();
     }
 
+    /**
+     * Tests the configured provider connection without modifying calendar data.
+     *
+     * @return string JSON-encoded connection test result.
+     */
     public function TestConnection(): string
     {
         $validationError = $this->validateConfiguration();
@@ -364,6 +397,11 @@ class KalenderKonto extends IPSModuleStrict
         }
     }
 
+    /**
+     * Refreshes the account-level calendar discovery cache.
+     *
+     * @return bool True when synchronization succeeded.
+     */
     public function Synchronize(): bool
     {
         if (!$this->ReadPropertyBoolean('Active')) {
@@ -405,11 +443,21 @@ class KalenderKonto extends IPSModuleStrict
         }
     }
 
+    /**
+     * Returns the calendars currently cached for this account.
+     *
+     * @return string JSON-encoded calendar list.
+     */
     public function GetCalendars(): string
     {
         return $this->ReadAttributeString('CachedCalendars');
     }
 
+    /**
+     * Returns provider, synchronization, and cache status for this account.
+     *
+     * @return string JSON-encoded account status.
+     */
     public function GetAccountStatus(): string
     {
         return json_encode(
@@ -432,6 +480,9 @@ class KalenderKonto extends IPSModuleStrict
         );
     }
 
+    /**
+     * Clears account-level calendar and iCalendar feed caches.
+     */
     public function ClearCache(): void
     {
         $this->WriteAttributeString('CachedCalendars', '[]');

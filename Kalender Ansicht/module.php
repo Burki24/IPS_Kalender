@@ -10,6 +10,9 @@ class KalenderAnsicht extends IPSModuleStrict
     private const STATUS_NO_CALENDARS = 201;
     private const STATUS_INVALID_CONFIGURATION = 202;
 
+    /**
+     * Registers visualization properties, runtime attributes, and initialization state.
+     */
     public function Create(): void
     {
         parent::Create();
@@ -39,6 +42,11 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterTimer('InitializationTimer', 0, 'IPSKALVIEW_Initialize($_IPS[\'TARGET\']);');
     }
 
+    /**
+     * Builds the visualization configuration form and restores a backed-up calendar selection when needed.
+     *
+     * @return string JSON-encoded configuration form.
+     */
     public function GetConfigurationForm(): string
     {
         $form = json_decode(
@@ -67,6 +75,9 @@ class KalenderAnsicht extends IPSModuleStrict
         );
     }
 
+    /**
+     * Applies visualization settings and schedules runtime initialization.
+     */
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
@@ -94,6 +105,11 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->scheduleInitialization();
     }
 
+    /**
+     * Initializes calendar subscriptions and broadcasts the initial visualization state.
+     *
+     * @return bool True when initialization was processed.
+     */
     public function Initialize(): bool
     {
         $this->SetTimerInterval('InitializationTimer', 0);
@@ -134,6 +150,11 @@ class KalenderAnsicht extends IPSModuleStrict
         return true;
     }
 
+    /**
+     * Reacts to kernel, calendar-name, and event-variable changes.
+     *
+     * @param array<int, mixed> $Data Message payload supplied by Symcon.
+     */
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
         if ($SenderID === 0 && $Message === IPS_KERNELSTARTED) {
@@ -147,11 +168,22 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->broadcastState();
     }
 
+    /**
+     * Renders the HTML used by the native Symcon visualization tile.
+     *
+     * @return string Rendered calendar HTML.
+     */
     public function GetVisualizationTile(): string
     {
         return $this->renderCalendarHtml($this->buildState(), false);
     }
 
+    /**
+     * Handles configuration-form and interactive visualization actions.
+     *
+     * @param string $Ident Action identifier supplied by Symcon or the visualization.
+     * @param mixed  $Value Action payload.
+     */
     public function RequestAction(string $Ident, mixed $Value): void
     {
         try {
@@ -252,6 +284,11 @@ class KalenderAnsicht extends IPSModuleStrict
         }
     }
 
+    /**
+     * Synchronizes all currently selected calendar instances and refreshes the visualization state.
+     *
+     * @return bool True when every selected calendar synchronized successfully.
+     */
     public function SynchronizeCalendars(): bool
     {
         $success = true;
@@ -264,6 +301,11 @@ class KalenderAnsicht extends IPSModuleStrict
         return $success;
     }
 
+    /**
+     * Selects every available calendar instance and reapplies the visualization configuration.
+     *
+     * @return bool False when no calendar instances are available.
+     */
     public function SelectAllCalendars(): bool
     {
         $selection = array_map(
@@ -288,6 +330,11 @@ class KalenderAnsicht extends IPSModuleStrict
         return true;
     }
 
+    /**
+     * Returns the complete aggregated visualization state for the selected calendars.
+     *
+     * @return string JSON-encoded visualization state.
+     */
     public function GetAggregatedEvents(): string
     {
         return json_encode(
@@ -296,6 +343,11 @@ class KalenderAnsicht extends IPSModuleStrict
         );
     }
 
+    /**
+     * Renders the standalone HTML representation used by IPSView.
+     *
+     * @return string Rendered IPSView calendar HTML.
+     */
     public function GetIPSViewHTML(): string
     {
         return $this->renderCalendarHtml($this->buildState(), true);

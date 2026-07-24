@@ -16,6 +16,9 @@ require_once __DIR__ . '/ICalendarCodec.php';
 
 final class ICalendarFeedProviderException extends RuntimeException
 {
+    /**
+     * Creates an iCalendar feed exception with an optional HTTP status code.
+     */
     public function __construct(string $message, public readonly int $httpStatus = 0)
     {
         parent::__construct($message);
@@ -35,6 +38,8 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
     private ?Closure $cacheWriter;
 
     /**
+     * Creates a read-only provider for one iCalendar/webcal feed.
+     *
      * @param array<string, mixed> $cacheState
      * @param callable(array<string, mixed>): void|null $cacheWriter
      */
@@ -50,6 +55,7 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         $this->cacheWriter = $cacheWriter !== null ? Closure::fromCallable($cacheWriter) : null;
     }
 
+    /** @inheritDoc */
     public function testConnection(): array
     {
         $feed = $this->fetchFeed(false);
@@ -66,6 +72,7 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function getCalendars(): array
     {
         $feed = $this->fetchFeed();
@@ -97,6 +104,7 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         ]];
     }
 
+    /** @inheritDoc */
     public function getEvents(string $calendarReference, DateTimeImmutable $start, DateTimeImmutable $end): array
     {
         if ($end <= $start) {
@@ -124,11 +132,13 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         return $events;
     }
 
+    /** @inheritDoc */
     public function createEvent(string $calendarReference, array $event): array
     {
         throw new ICalendarFeedProviderException('iCalendar subscriptions are read-only.');
     }
 
+    /** @inheritDoc */
     public function updateEvent(
         string $calendarReference,
         string $eventReference,
@@ -139,6 +149,7 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         throw new ICalendarFeedProviderException('iCalendar subscriptions are read-only.');
     }
 
+    /** @inheritDoc */
     public function deleteEvent(
         string $calendarReference,
         string $eventReference,

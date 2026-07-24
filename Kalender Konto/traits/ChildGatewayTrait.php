@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 trait KalenderKontoChildGatewayTrait
 {
+    /**
+     * Processes a request received from a child calendar or configurator instance.
+     *
+     * @param string $JSONString JSON-encoded gateway request.
+     * @return string JSON-encoded gateway response.
+     */
     public function ForwardData(string $JSONString): string
     {
         try {

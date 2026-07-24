@@ -16,6 +16,8 @@ require_once __DIR__ . '/ICalendarRecurrence.php';
 final class ICalendarCodec
 {
     /**
+     * Parses VEVENT components from an iCalendar resource into normalized event records.
+     *
      * @return list<array<string, mixed>>
      */
     public static function parseEvents(string $ical, string $resourceUrl, string $etag): array
@@ -72,6 +74,8 @@ final class ICalendarCodec
     }
 
     /**
+     * Parses an iCalendar resource and expands recurring events within the requested range.
+     *
      * @return list<array<string, mixed>>
      */
     public static function parseEventsInRange(
@@ -89,6 +93,8 @@ final class ICalendarCodec
     }
 
     /**
+     * Creates a standalone VCALENDAR document containing one VEVENT.
+     *
      * @param array<string, mixed> $data
      * @return array{uid: string, ical: string}
      */
@@ -148,6 +154,8 @@ final class ICalendarCodec
     }
 
     /**
+     * Updates a non-recurring VEVENT inside an existing iCalendar resource.
+     *
      * @param array<string, mixed> $data
      */
     public static function updateEvent(string $ical, string $uid, array $data): string

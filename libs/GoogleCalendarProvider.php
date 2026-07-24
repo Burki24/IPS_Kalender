@@ -16,6 +16,9 @@ require_once __DIR__ . '/CalendarHttpClient.php';
 
 final class GoogleCalendarProviderException extends RuntimeException
 {
+    /**
+     * Creates a Google Calendar provider exception with optional HTTP error metadata.
+     */
     public function __construct(
         string $message,
         public readonly int $httpStatus = 0,
@@ -29,6 +32,9 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
 {
     private const API_URL = 'https://www.googleapis.com/calendar/v3';
 
+    /**
+     * Creates a Google Calendar provider using an OAuth access token.
+     */
     public function __construct(
         private readonly CalendarHttpClientInterface $httpClient,
         private readonly string $accessToken
@@ -38,6 +44,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         }
     }
 
+    /** @inheritDoc */
     public function testConnection(): array
     {
         $calendars = $this->getCalendars();
@@ -49,6 +56,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         ];
     }
 
+    /** @inheritDoc */
     public function getCalendars(): array
     {
         $calendars = [];
@@ -115,6 +123,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         return $calendars;
     }
 
+    /** @inheritDoc */
     public function getEvents(string $calendarReference, DateTimeImmutable $start, DateTimeImmutable $end): array
     {
         if ($end <= $start) {
@@ -161,6 +170,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         return $events;
     }
 
+    /** @inheritDoc */
     public function createEvent(string $calendarReference, array $event): array
     {
         $calendarId = $this->calendarId($calendarReference);
@@ -176,6 +186,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         return $this->writeResult($calendarId, $created);
     }
 
+    /** @inheritDoc */
     public function updateEvent(
         string $calendarReference,
         string $eventReference,
@@ -197,6 +208,7 @@ final class GoogleCalendarProvider implements CalendarProviderInterface
         return $this->writeResult($calendarId, $updated);
     }
 
+    /** @inheritDoc */
     public function deleteEvent(
         string $calendarReference,
         string $eventReference,
