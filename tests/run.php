@@ -803,6 +803,13 @@ assertTrueValue(
     'The calendar module must defer parent communication until the kernel is ready.'
 );
 assertTrueValue(
+    is_string($calendarModuleSource)
+        && str_contains($calendarModuleSource, "RegisterAttributeString('ResolvedCalendarID', '')")
+        && str_contains($calendarModuleSource, 'private function effectiveCalendarId(): string')
+        && str_contains($calendarModuleSource, 'Recovered the calendar identity from the unique instance name.'),
+    'Existing calendar instances with a missing ID must recover an unambiguous identity without recreation.'
+);
+assertTrueValue(
     is_string($viewModuleSource)
         && str_contains($viewModuleSource, 'RegisterMessage(0, IPS_KERNELSTARTED)')
         && str_contains($viewModuleSource, "RegisterTimer('InitializationTimer'")

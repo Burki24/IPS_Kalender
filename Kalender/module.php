@@ -36,6 +36,7 @@ class Kalender extends IPSModuleStrict
         $this->RegisterAttributeInteger('LastSynchronization', 0);
         $this->RegisterAttributeString('LastError', '');
         $this->RegisterAttributeBoolean('CalendarMetadataAvailable', false);
+        $this->RegisterAttributeString('ResolvedCalendarID', '');
         $this->RegisterAttributeString('DetectedCalendarColor', '');
         $this->RegisterAttributeBoolean('DetectedCanWrite', false);
         $this->RegisterAttributeBoolean('RuntimeReady', false);
@@ -277,7 +278,7 @@ class Kalender extends IPSModuleStrict
 
         return json_encode(
             [
-                'calendarId'          => $this->ReadPropertyString('CalendarID'),
+                'calendarId'          => $this->effectiveCalendarId(),
                 'calendarColor'       => $metadataAvailable && $detectedColor !== ''
                     ? $detectedColor
                     : $this->ReadPropertyString('CalendarColor'),
@@ -306,7 +307,7 @@ class Kalender extends IPSModuleStrict
      */
     private function applyCalendarMetadata(array $calendars): void
     {
-        $calendarId = $this->ReadPropertyString('CalendarID');
+        $calendarId = $this->effectiveCalendarId();
         $providerCalendarId = $this->ReadPropertyString('ProviderCalendarID');
         $calendarUrl = $this->ReadPropertyString('CalendarURL');
         $availableCalendars = [];
@@ -327,12 +328,33 @@ class Kalender extends IPSModuleStrict
             return;
         }
 
+        $instanceName = trim(IPS_GetName($this->InstanceID));
+        if ($instanceName !== '') {
+            $nameMatches = array_values(array_filter(
+                $availableCalendars,
+                static fn(array $calendar): bool => strcasecmp(
+                    trim((string) ($calendar['name'] ?? '')),
+                    $instanceName
+                ) === 0
+            ));
+            if (count($nameMatches) === 1) {
+                $this->SendDebug(
+                    'CalendarResolution',
+                    'Recovered the calendar identity from the unique instance name.',
+                    0
+                );
+                $this->storeCalendarMetadata($nameMatches[0]);
+                return;
+            }
+        }
+
         if (count($availableCalendars) === 1) {
             $this->storeCalendarMetadata($availableCalendars[0]);
             return;
         }
 
         if ($availableCalendars !== []) {
+            $this->WriteAttributeString('ResolvedCalendarID', '');
             $this->WriteAttributeBoolean('CalendarMetadataAvailable', false);
         }
     }
@@ -346,6 +368,7 @@ class Kalender extends IPSModuleStrict
         $canWrite = (bool) ($capabilities['create'] ?? false)
             || (bool) ($capabilities['update'] ?? false)
             || (bool) ($capabilities['delete'] ?? false);
+        $this->WriteAttributeString('ResolvedCalendarID', trim((string) ($calendar['id'] ?? '')));
         $this->WriteAttributeString('DetectedCalendarColor', trim((string) ($calendar['color'] ?? '')));
         $this->WriteAttributeBoolean('DetectedCanWrite', $canWrite);
         $this->WriteAttributeBoolean('CalendarMetadataAvailable', true);
@@ -387,7 +410,7 @@ class Kalender extends IPSModuleStrict
                 'DataID'     => self::DATA_ID_TO_PARENT,
                 'Operation'  => $operation,
                 'RequestID'  => bin2hex(random_bytes(8)),
-                'CalendarID' => $this->ReadPropertyString('CalendarID')
+                'CalendarID' => $this->effectiveCalendarId()
             ],
             $additionalData
         );
@@ -423,6 +446,14 @@ class Kalender extends IPSModuleStrict
     {
         return IPS_GetKernelRunlevel() === KR_READY
             && $this->ReadAttributeBoolean('RuntimeReady');
+    }
+
+    private function effectiveCalendarId(): string
+    {
+        $calendarId = trim($this->ReadPropertyString('CalendarID'));
+        return $calendarId !== ''
+            ? $calendarId
+            : trim($this->ReadAttributeString('ResolvedCalendarID'));
     }
 
     /**
