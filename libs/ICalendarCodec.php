@@ -11,6 +11,8 @@ use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
+require_once __DIR__ . '/ICalendarRecurrence.php';
+
 final class ICalendarCodec
 {
     /**
@@ -31,8 +33,12 @@ final class ICalendarCodec
             $endProperty = self::firstProperty($properties, 'DTEND');
             $end = $endProperty !== null
                 ? self::parseDateProperty($endProperty)
-                : self::defaultEnd($start);
-            $recurrenceId = self::propertyValue($properties, 'RECURRENCE-ID');
+                : self::endFromDuration($start, self::propertyValue($properties, 'DURATION'));
+            $recurrenceIdProperty = self::firstProperty($properties, 'RECURRENCE-ID');
+            $recurrenceId = $recurrenceIdProperty['value'] ?? '';
+            $parsedRecurrenceId = $recurrenceIdProperty !== null
+                ? self::parseDateProperty($recurrenceIdProperty)
+                : null;
 
             $events[] = [
                 'id'                => hash('sha256', $resourceUrl . '|' . $uid . '|' . $recurrenceId . '|' . $start['value']),
@@ -51,6 +57,9 @@ final class ICalendarCodec
                 'status'            => strtoupper(self::propertyValue($properties, 'STATUS')),
                 'recurrenceRule'    => self::propertyValue($properties, 'RRULE'),
                 'recurrenceId'      => $recurrenceId,
+                'recurrenceIdTimestamp' => $parsedRecurrenceId['timestamp'] ?? null,
+                'exceptionDates'    => self::parseDatePropertyList($properties['EXDATE'] ?? []),
+                'recurrenceDates'   => self::parseDatePropertyList($properties['RDATE'] ?? []),
                 'recurring'         => self::propertyValue($properties, 'RRULE') !== '' || $recurrenceId !== '',
                 'sequence'          => (int) self::propertyValue($properties, 'SEQUENCE'),
                 'created'           => self::parseOptionalDate(self::firstProperty($properties, 'CREATED')),
@@ -60,6 +69,23 @@ final class ICalendarCodec
         }
 
         return $events;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public static function parseEventsInRange(
+        string $ical,
+        string $resourceUrl,
+        string $etag,
+        DateTimeImmutable $start,
+        DateTimeImmutable $end
+    ): array {
+        return ICalendarRecurrence::expand(
+            self::parseEvents($ical, $resourceUrl, $etag),
+            $start,
+            $end
+        );
     }
 
     /**
@@ -351,10 +377,12 @@ final class ICalendarCodec
                 $date = DateTimeImmutable::createFromFormat('!Ymd', $raw, $timezone);
             } elseif (str_ends_with(strtoupper($raw), 'Z')) {
                 $timezone = new DateTimeZone('UTC');
-                $date = DateTimeImmutable::createFromFormat('!Ymd\THis\Z', strtoupper($raw), $timezone);
+                $format = strlen($raw) === 14 ? '!Ymd\THi\Z' : '!Ymd\THis\Z';
+                $date = DateTimeImmutable::createFromFormat($format, strtoupper($raw), $timezone);
             } else {
                 $timezone = self::timezone($timezoneName);
-                $date = DateTimeImmutable::createFromFormat('!Ymd\THis', $raw, $timezone);
+                $format = strlen($raw) === 13 ? '!Ymd\THi' : '!Ymd\THis';
+                $date = DateTimeImmutable::createFromFormat($format, $raw, $timezone);
             }
         } catch (Throwable) {
             $date = false;
@@ -370,6 +398,33 @@ final class ICalendarCodec
             'allDay'    => $allDay,
             'timezone'  => $date->getTimezone()->getName()
         ];
+    }
+
+    /**
+     * @param list<array{value: string, params: array<string, string>}> $properties
+     * @return list<array{value: string, timestamp: int, allDay: bool, timezone: string}>
+     */
+    private static function parseDatePropertyList(array $properties): array
+    {
+        $result = [];
+        foreach ($properties as $property) {
+            foreach (explode(',', $property['value']) as $value) {
+                $value = trim($value);
+                if ($value === '' || str_contains($value, '/')) {
+                    continue;
+                }
+                try {
+                    $result[] = self::parseDateProperty([
+                        'value'  => $value,
+                        'params' => $property['params']
+                    ]);
+                } catch (Throwable) {
+                    continue;
+                }
+            }
+        }
+
+        return $result;
     }
 
     /**
@@ -396,6 +451,37 @@ final class ICalendarCodec
     }
 
     /**
+     * @param array{value: string, timestamp: int, allDay: bool, timezone: string} $start
+     * @return array{value: string, timestamp: int, allDay: bool, timezone: string}
+     */
+    private static function endFromDuration(array $start, string $duration): array
+    {
+        $duration = strtoupper(trim($duration));
+        if ($duration === '') {
+            return self::defaultEnd($start);
+        }
+
+        try {
+            if (str_starts_with($duration, '-')) {
+                throw new RuntimeException('Negative event duration.');
+            }
+            $timezone = self::timezone($start['timezone']);
+            $date = (new DateTimeImmutable('@' . $start['timestamp']))
+                ->setTimezone($timezone)
+                ->add(new DateInterval($duration));
+
+            return [
+                'value'     => $start['allDay'] ? $date->format('Y-m-d') : $date->format(DATE_ATOM),
+                'timestamp' => $date->getTimestamp(),
+                'allDay'    => $start['allDay'],
+                'timezone'  => $date->getTimezone()->getName()
+            ];
+        } catch (Throwable) {
+            return self::defaultEnd($start);
+        }
+    }
+
+    /**
      * @param array{value: string, params: array<string, string>}|null $property
      */
     private static function parseOptionalDate(?array $property): string
@@ -413,9 +499,16 @@ final class ICalendarCodec
 
     private static function timezone(string $name): DateTimeZone
     {
+        $name = trim($name, " \t\n\r\0\x0B\"");
         try {
             return new DateTimeZone($name !== '' ? $name : date_default_timezone_get());
         } catch (Throwable) {
+            foreach (timezone_identifiers_list() as $identifier) {
+                if (str_ends_with($name, '/' . $identifier)) {
+                    return new DateTimeZone($identifier);
+                }
+            }
+
             return new DateTimeZone('UTC');
         }
     }

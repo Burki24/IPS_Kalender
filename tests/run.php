@@ -5,6 +5,7 @@ declare(strict_types=1);
 use IPSKalender\CalendarHttpClientInterface;
 use IPSKalender\CalendarHttpResponse;
 use IPSKalender\GoogleCalendarProvider;
+use IPSKalender\ICalendarCodec;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\OAuthBridgeClient;
@@ -223,6 +224,7 @@ $feedCalendars = $provider->getCalendars();
 assertSameValue('Google Privat', $feedCalendars[0]['name'], 'The feed calendar name must be read from X-WR-CALNAME.');
 assertSameValue('#34AADC', $feedCalendars[0]['color'], 'Eight-digit feed colors must be normalized.');
 assertSameValue(false, $feedCalendars[0]['capabilities']['create'], 'iCalendar subscriptions must be read-only.');
+assertSameValue('', $feedCalendars[0]['url'], 'Secret feed URLs must not be copied into child instance properties.');
 $feedEvents = $provider->getEvents(
     $feedCalendars[0]['reference'],
     new DateTimeImmutable('2026-07-19T00:00:00Z'),
@@ -230,6 +232,10 @@ $feedEvents = $provider->getEvents(
 );
 assertSameValue(1, count($feedEvents), 'Feed events outside the requested range must be excluded.');
 assertSameValue('Included event', $feedEvents[0]['summary'], 'The event inside the range must be returned.');
+assertTrueValue(
+    !str_contains($feedEvents[0]['resourceUrl'], 'private.ics'),
+    'Secret feed URLs must not be copied into event data.'
+);
 assertSameValue('https://calendar.example/private.ics', $feedClient->requests[0]['url'], 'Webcal URLs must be fetched over HTTPS.');
 try {
     $provider->createEvent($feedCalendars[0]['reference'], ['summary' => 'Not allowed']);
@@ -237,6 +243,150 @@ try {
 } catch (ICalendarFeedProviderException $exception) {
     assertTrueValue(str_contains($exception->getMessage(), 'read-only'), 'Write attempts must explain the read-only limitation.');
 }
+
+$recurringFeed = "BEGIN:VCALENDAR\r\n"
+    . "VERSION:2.0\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:weekly-series@example.com\r\n"
+    . "DTSTART;TZID=Europe/Berlin:20260323T100000\r\n"
+    . "DTEND;TZID=Europe/Berlin:20260323T110000\r\n"
+    . "RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=4\r\n"
+    . "EXDATE;TZID=Europe/Berlin:20260406T100000\r\n"
+    . "RDATE;TZID=Europe/Berlin:20260408T100000\r\n"
+    . "SUMMARY:Weekly meeting\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:weekly-series@example.com\r\n"
+    . "RECURRENCE-ID;TZID=Europe/Berlin:20260330T100000\r\n"
+    . "DTSTART;TZID=Europe/Berlin:20260331T140000\r\n"
+    . "DTEND;TZID=Europe/Berlin:20260331T150000\r\n"
+    . "SEQUENCE:2\r\n"
+    . "SUMMARY:Moved meeting\r\n"
+    . "END:VEVENT\r\n"
+    . "END:VCALENDAR\r\n";
+$recurringEvents = ICalendarCodec::parseEventsInRange(
+    $recurringFeed,
+    'https://calendar.example/recurring.ics',
+    '"series"',
+    new DateTimeImmutable('2026-03-20T00:00:00Z'),
+    new DateTimeImmutable('2026-04-20T00:00:00Z')
+);
+assertSameValue(4, count($recurringEvents), 'RRULE, EXDATE, RDATE and moved overrides must form one recurrence set.');
+assertSameValue('2026-03-23T10:00:00+01:00', $recurringEvents[0]['start'], 'The first occurrence must use winter time.');
+assertSameValue('Moved meeting', $recurringEvents[1]['summary'], 'A RECURRENCE-ID override must replace its generated occurrence.');
+assertSameValue('2026-03-31T14:00:00+02:00', $recurringEvents[1]['start'], 'Moved occurrences must retain their actual local time.');
+assertSameValue('2026-04-08T10:00:00+02:00', $recurringEvents[2]['start'], 'RDATE must add an occurrence.');
+assertSameValue('2026-04-13T10:00:00+02:00', $recurringEvents[3]['start'], 'Weekly recurrences must preserve wall time after DST.');
+assertSameValue(true, $recurringEvents[3]['recurring'], 'Generated recurrence instances must be marked as recurring.');
+
+$monthlyFeed = "BEGIN:VCALENDAR\r\n"
+    . "VERSION:2.0\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:first-monday@example.com\r\n"
+    . "DTSTART;TZID=Europe/Berlin:20260105T090000\r\n"
+    . "DTEND;TZID=Europe/Berlin:20260105T100000\r\n"
+    . "RRULE:FREQ=MONTHLY;BYDAY=1MO;COUNT=3\r\n"
+    . "SUMMARY:First Monday\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:last-workday@example.com\r\n"
+    . "DTSTART;VALUE=DATE:20260130\r\n"
+    . "DTEND;VALUE=DATE:20260131\r\n"
+    . "RRULE:FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1;COUNT=3\r\n"
+    . "SUMMARY:Last workday\r\n"
+    . "END:VEVENT\r\n"
+    . "END:VCALENDAR\r\n";
+$monthlyEvents = ICalendarCodec::parseEventsInRange(
+    $monthlyFeed,
+    'https://calendar.example/monthly.ics',
+    '',
+    new DateTimeImmutable('2026-01-01T00:00:00Z'),
+    new DateTimeImmutable('2026-04-02T00:00:00Z')
+);
+$firstMondayDates = array_values(array_map(
+    static fn(array $event): string => substr((string) $event['start'], 0, 10),
+    array_filter($monthlyEvents, static fn(array $event): bool => $event['uid'] === 'first-monday@example.com')
+));
+$lastWorkdayDates = array_values(array_map(
+    static fn(array $event): string => (string) $event['start'],
+    array_filter($monthlyEvents, static fn(array $event): bool => $event['uid'] === 'last-workday@example.com')
+));
+assertSameValue(
+    ['2026-01-05', '2026-02-02', '2026-03-02'],
+    $firstMondayDates,
+    'Ordinal BYDAY rules must generate the first Monday of each month.'
+);
+assertSameValue(
+    ['2026-01-30', '2026-02-27', '2026-03-31'],
+    $lastWorkdayDates,
+    'BYSETPOS=-1 must select the final matching weekday of each month.'
+);
+
+$advancedFeed = "BEGIN:VCALENDAR\r\n"
+    . "VERSION:2.0\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:daily-until@example.com\r\n"
+    . "DTSTART;VALUE=DATE:20260701\r\n"
+    . "DTEND;VALUE=DATE:20260702\r\n"
+    . "RRULE:FREQ=DAILY;UNTIL=20260703\r\n"
+    . "SUMMARY:Daily until\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:daily-until@example.com\r\n"
+    . "RECURRENCE-ID;VALUE=DATE:20260702\r\n"
+    . "DTSTART;VALUE=DATE:20260702\r\n"
+    . "DTEND;VALUE=DATE:20260703\r\n"
+    . "STATUS:CANCELLED\r\n"
+    . "SUMMARY:Cancelled day\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:last-month-day@example.com\r\n"
+    . "DTSTART;VALUE=DATE:20260131\r\n"
+    . "DTEND;VALUE=DATE:20260201\r\n"
+    . "RRULE:FREQ=MONTHLY;BYMONTHDAY=-1;COUNT=3\r\n"
+    . "SUMMARY:Month end\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:yearly-sunday@example.com\r\n"
+    . "DTSTART;VALUE=DATE:20260329\r\n"
+    . "DTEND;VALUE=DATE:20260330\r\n"
+    . "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU;COUNT=2\r\n"
+    . "SUMMARY:Last Sunday in March\r\n"
+    . "END:VEVENT\r\n"
+    . "BEGIN:VEVENT\r\n"
+    . "UID:duration@example.com\r\n"
+    . "DTSTART;TZID=Europe/Berlin:20260705T100000\r\n"
+    . "DURATION:PT1H30M\r\n"
+    . "SUMMARY:Duration event\r\n"
+    . "END:VEVENT\r\n"
+    . "END:VCALENDAR\r\n";
+$advancedEvents = ICalendarCodec::parseEventsInRange(
+    $advancedFeed,
+    'https://calendar.example/advanced.ics',
+    '',
+    new DateTimeImmutable('2026-01-01T00:00:00Z'),
+    new DateTimeImmutable('2028-01-01T00:00:00Z')
+);
+$dailyDates = array_values(array_map(
+    static fn(array $event): string => (string) $event['start'],
+    array_filter($advancedEvents, static fn(array $event): bool => $event['uid'] === 'daily-until@example.com')
+));
+$monthEndDates = array_values(array_map(
+    static fn(array $event): string => (string) $event['start'],
+    array_filter($advancedEvents, static fn(array $event): bool => $event['uid'] === 'last-month-day@example.com')
+));
+$yearlyDates = array_values(array_map(
+    static fn(array $event): string => (string) $event['start'],
+    array_filter($advancedEvents, static fn(array $event): bool => $event['uid'] === 'yearly-sunday@example.com')
+));
+assertSameValue(['2026-07-01', '2026-07-03'], $dailyDates, 'UNTIL must be inclusive and cancelled overrides must remove occurrences.');
+assertSameValue(['2026-01-31', '2026-02-28', '2026-03-31'], $monthEndDates, 'Negative BYMONTHDAY values must count from month end.');
+assertSameValue(['2026-03-29', '2027-03-28'], $yearlyDates, 'Yearly ordinal BYDAY rules must be expanded.');
+$durationEvents = array_values(array_filter(
+    $advancedEvents,
+    static fn(array $event): bool => $event['uid'] === 'duration@example.com'
+));
+assertSameValue('2026-07-05T11:30:00+02:00', $durationEvents[0]['end'], 'DURATION must define the event end when DTEND is absent.');
 
 assertSameValue(
     604800000,

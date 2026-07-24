@@ -41,7 +41,11 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         return [
             'success'       => true,
             'calendarCount' => 1,
-            'eventCount'    => count(ICalendarCodec::parseEvents($feed['body'], $this->feedUrl, $feed['etag'])),
+            'eventCount'    => count(ICalendarCodec::parseEvents(
+                $feed['body'],
+                $this->eventResourceReference(),
+                $feed['etag']
+            )),
             'message'       => 'Connection successful.'
         ];
     }
@@ -62,7 +66,7 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
             'id'           => $calendarId,
             'providerId'   => $calendarId,
             'reference'    => $this->feedUrl,
-            'url'          => $this->feedUrl,
+            'url'          => '',
             'name'         => $name,
             'description'  => $this->calendarProperty($feed['body'], 'X-WR-CALDESC'),
             'color'        => $this->normalizeColor($this->calendarProperty($feed['body'], 'X-APPLE-CALENDAR-COLOR')),
@@ -87,11 +91,13 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         }
 
         $feed = $this->fetchFeed();
-        $events = array_values(array_filter(
-            ICalendarCodec::parseEvents($feed['body'], $this->feedUrl, $feed['etag']),
-            static fn(array $event): bool => (int) ($event['endTimestamp'] ?? 0) > $start->getTimestamp()
-                && (int) ($event['startTimestamp'] ?? 0) < $end->getTimestamp()
-        ));
+        $events = ICalendarCodec::parseEventsInRange(
+            $feed['body'],
+            $this->eventResourceReference(),
+            $feed['etag'],
+            $start,
+            $end
+        );
 
         usort(
             $events,
@@ -194,5 +200,10 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
         }
 
         return strtoupper(substr($color, 0, 7));
+    }
+
+    private function eventResourceReference(): string
+    {
+        return 'urn:ips-kalender:ics:' . hash('sha256', $this->feedUrl);
     }
 }

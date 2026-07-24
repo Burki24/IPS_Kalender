@@ -70,6 +70,10 @@ Nach Auswahl von **ICS/Webcal** wird die private oder öffentliche iCalendar-Adr
 
 iCalendar-Abonnements sind grundsätzlich schreibgeschützt. Die Feed-URL kann – etwa bei Googles „Privatadresse im iCal-Format“ – selbst ein Zugangsgeheimnis enthalten und sollte daher wie ein Passwort behandelt werden.
 
+Terminserien aus einem Feed werden lokal für den von der Kalenderinstanz angeforderten Zeitraum aufgelöst. Unterstützt werden tägliche, wöchentliche, monatliche und jährliche `RRULE`-Serien einschließlich `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTH`, `BYMONTHDAY`, `BYSETPOS` und `WKST`. `RDATE` ergänzt einzelne Vorkommen, `EXDATE` entfernt sie und über `RECURRENCE-ID` gelieferte Änderungen oder Absagen ersetzen das zugehörige Serienvorkommen. Lokale Uhrzeiten werden in der angegebenen Zeitzone erzeugt, sodass sie auch über Sommer- und Winterzeitwechsel konstant bleiben.
+
+Geheime Feed-Adressen werden nicht in die Terminvariable oder die Konfiguration einer erzeugten Kalenderinstanz übernommen. Sie verbleiben in der zugehörigen Konto-Instanz.
+
 ## Datenfluss
 
 Unterstützte Anforderungen von Child-Modulen:
