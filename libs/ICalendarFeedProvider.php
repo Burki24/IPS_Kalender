@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace IPSKalender;
 
+use Closure;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use RuntimeException;
+use Throwable;
 
 require_once __DIR__ . '/CalendarProviderInterface.php';
 require_once __DIR__ . '/CalendarHttpClient.php';
@@ -26,17 +28,31 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
 
     private string $feedUrl;
 
+    /** @var array<string, mixed> */
+    private array $cacheState;
+
+    /** @var Closure(array<string, mixed>): void|null */
+    private ?Closure $cacheWriter;
+
+    /**
+     * @param array<string, mixed> $cacheState
+     * @param callable(array<string, mixed>): void|null $cacheWriter
+     */
     public function __construct(
         private readonly CalendarHttpClientInterface $httpClient,
         string $feedUrl,
-        private readonly string $configuredName = ''
+        private readonly string $configuredName = '',
+        array $cacheState = [],
+        ?callable $cacheWriter = null
     ) {
         $this->feedUrl = $this->normalizeUrl($feedUrl);
+        $this->cacheState = $cacheState;
+        $this->cacheWriter = $cacheWriter !== null ? Closure::fromCallable($cacheWriter) : null;
     }
 
     public function testConnection(): array
     {
-        $feed = $this->fetchFeed();
+        $feed = $this->fetchFeed(false);
 
         return [
             'success'       => true,
@@ -135,35 +151,171 @@ final class ICalendarFeedProvider implements CalendarProviderInterface
     /**
      * @return array{body: string, etag: string}
      */
-    private function fetchFeed(): array
+    private function fetchFeed(bool $allowStaleFallback = true): array
     {
-        $response = $this->httpClient->request(
-            'GET',
-            $this->feedUrl,
-            ['Accept' => 'text/calendar, */*;q=0.1']
-        );
+        $headers = ['Accept' => 'text/calendar, */*;q=0.1'];
+        if ($this->hasValidCachedBody()) {
+            $etag = trim((string) ($this->cacheState['etag'] ?? ''));
+            $lastModified = trim((string) ($this->cacheState['lastModified'] ?? ''));
+            if ($etag !== '') {
+                $headers['If-None-Match'] = $etag;
+            }
+            if ($lastModified !== '') {
+                $headers['If-Modified-Since'] = $lastModified;
+            }
+        }
+
+        try {
+            $response = $this->httpClient->request('GET', $this->feedUrl, $headers);
+        } catch (Throwable $exception) {
+            return $this->cachedFeedOrThrow(
+                'The calendar feed could not be refreshed: ' . $exception->getMessage(),
+                0,
+                $allowStaleFallback
+            );
+        }
 
         if (in_array($response->statusCode, [401, 403], true)) {
             throw new ICalendarFeedProviderException('Authentication failed or calendar access was denied.', $response->statusCode);
         }
+        if ($response->statusCode === 304) {
+            if (!$this->hasValidCachedBody()) {
+                throw new ICalendarFeedProviderException(
+                    'The calendar feed returned HTTP status 304 without a usable cached version.',
+                    304
+                );
+            }
+            $responseEtag = trim((string) ($response->headers['etag'] ?? ''));
+            $responseLastModified = trim((string) ($response->headers['last-modified'] ?? ''));
+            if ($responseEtag !== '') {
+                $this->cacheState['etag'] = $responseEtag;
+            }
+            if ($responseLastModified !== '') {
+                $this->cacheState['lastModified'] = $responseLastModified;
+            }
+            $this->cacheState['lastCheck'] = time();
+            $this->cacheState['lastError'] = '';
+            $this->cacheState['stale'] = false;
+            $this->persistCache();
+
+            return $this->cachedFeed();
+        }
         if ($response->statusCode !== 200) {
-            throw new ICalendarFeedProviderException(
-                sprintf('The calendar feed returned HTTP status %d.', $response->statusCode),
-                $response->statusCode
+            $message = sprintf('The calendar feed returned HTTP status %d.', $response->statusCode);
+            $isTemporary = in_array($response->statusCode, [408, 425, 429], true)
+                || $response->statusCode >= 500;
+
+            return $this->cachedFeedOrThrow(
+                $message,
+                $response->statusCode,
+                $allowStaleFallback && $isTemporary
             );
         }
-        if (strlen($response->body) > self::MAX_FEED_SIZE) {
-            throw new ICalendarFeedProviderException('The calendar feed is too large.');
+
+        try {
+            $this->validateFeedBody($response->body);
+        } catch (ICalendarFeedProviderException $exception) {
+            return $this->cachedFeedOrThrow(
+                $exception->getMessage(),
+                $exception->httpStatus,
+                $allowStaleFallback
+            );
         }
-        if (preg_match('/(?:^|\R)BEGIN:VCALENDAR(?:\R|$)/i', $response->body) !== 1
-            || preg_match('/(?:^|\R)END:VCALENDAR(?:\R|$)/i', $response->body) !== 1) {
-            throw new ICalendarFeedProviderException('The server response is not a valid iCalendar feed.');
+
+        $now = time();
+        $contentHash = hash('sha256', $response->body);
+        $previousHash = trim((string) ($this->cacheState['contentHash'] ?? ''));
+        if ($previousHash === '' && $this->hasValidCachedBody()) {
+            $previousHash = hash('sha256', (string) $this->cacheState['body']);
         }
+        $lastChange = $previousHash !== '' && hash_equals($previousHash, $contentHash)
+            ? (int) ($this->cacheState['lastChange'] ?? $now)
+            : $now;
+
+        $this->cacheState = [
+            'body'          => $response->body,
+            'etag'          => trim((string) ($response->headers['etag'] ?? '')),
+            'lastModified'  => trim((string) ($response->headers['last-modified'] ?? '')),
+            'contentHash'   => $contentHash,
+            'lastCheck'     => $now,
+            'lastDownload'  => $now,
+            'lastChange'    => $lastChange,
+            'lastError'     => '',
+            'stale'         => false
+        ];
+        $this->persistCache();
 
         return [
             'body' => $response->body,
-            'etag' => trim((string) ($response->headers['etag'] ?? ''))
+            'etag' => (string) $this->cacheState['etag']
         ];
+    }
+
+    private function validateFeedBody(string $body): void
+    {
+        if (strlen($body) > self::MAX_FEED_SIZE) {
+            throw new ICalendarFeedProviderException('The calendar feed is too large.');
+        }
+        if (preg_match('/(?:^|\R)BEGIN:VCALENDAR(?:\R|$)/i', $body) !== 1
+            || preg_match('/(?:^|\R)END:VCALENDAR(?:\R|$)/i', $body) !== 1) {
+            throw new ICalendarFeedProviderException('The server response is not a valid iCalendar feed.');
+        }
+    }
+
+    private function hasValidCachedBody(): bool
+    {
+        $body = $this->cacheState['body'] ?? null;
+        if (!is_string($body) || $body === '') {
+            return false;
+        }
+
+        try {
+            $this->validateFeedBody($body);
+            return true;
+        } catch (ICalendarFeedProviderException) {
+            return false;
+        }
+    }
+
+    /**
+     * @return array{body: string, etag: string}
+     */
+    private function cachedFeedOrThrow(string $message, int $httpStatus, bool $allowFallback): array
+    {
+        if (!$allowFallback || !$this->hasValidCachedBody()) {
+            throw new ICalendarFeedProviderException($message, $httpStatus);
+        }
+
+        $this->cacheState['lastCheck'] = time();
+        $this->cacheState['lastError'] = $message;
+        $this->cacheState['stale'] = true;
+        $this->persistCache();
+
+        return $this->cachedFeed();
+    }
+
+    /**
+     * @return array{body: string, etag: string}
+     */
+    private function cachedFeed(): array
+    {
+        return [
+            'body' => (string) ($this->cacheState['body'] ?? ''),
+            'etag' => trim((string) ($this->cacheState['etag'] ?? ''))
+        ];
+    }
+
+    private function persistCache(): void
+    {
+        if ($this->cacheWriter === null) {
+            return;
+        }
+
+        try {
+            ($this->cacheWriter)($this->cacheState);
+        } catch (Throwable) {
+            // Caching must never make an otherwise valid calendar request fail.
+        }
     }
 
     private function normalizeUrl(string $url): string

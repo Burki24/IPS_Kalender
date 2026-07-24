@@ -26,7 +26,7 @@ Empfohlene Reihenfolge:
 Folgende Module beinhaltet das IPS_Kalender Repository:
 
 - __Kalender Konto__ ([Dokumentation](Kalender%20Konto))  
-	Verbindet Apple-iCloud-, Google-Calendar- und CalDAV-Konten, bündelt mehrere iCalendar-Abonnements in einem Konto, löst wiederkehrende Feed-Termine lokal auf und stellt die Kalender bereit.
+	Verbindet Apple-iCloud-, Google-Calendar- und CalDAV-Konten, bündelt mehrere iCalendar-Abonnements in einem Konto, hält eine geprüfte Feed-Rückfallebene vor, löst wiederkehrende Feed-Termine lokal auf und stellt die Kalender bereit.
 
 - __Kalender Konfigurator__ ([Dokumentation](Kalender%20Konfigurator))  
 	Findet Kalender eines Kontos und legt Kalenderinstanzen an.

@@ -20,13 +20,13 @@ require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
 final class FakeHttpClient implements CalendarHttpClientInterface
 {
-    /** @var list<CalendarHttpResponse> */
+    /** @var list<CalendarHttpResponse|Throwable> */
     private array $responses;
 
     /** @var list<array{method: string, url: string, headers: array<string, string>, body: string}> */
     public array $requests = [];
 
-    /** @param list<CalendarHttpResponse> $responses */
+    /** @param list<CalendarHttpResponse|Throwable> $responses */
     public function __construct(array $responses)
     {
         $this->responses = $responses;
@@ -38,7 +38,12 @@ final class FakeHttpClient implements CalendarHttpClientInterface
         if ($this->responses === []) {
             throw new RuntimeException('No fake response was queued.');
         }
-        return array_shift($this->responses);
+        $response = array_shift($this->responses);
+        if ($response instanceof Throwable) {
+            throw $response;
+        }
+
+        return $response;
     }
 }
 
@@ -244,6 +249,125 @@ try {
     throw new RuntimeException('The read-only feed unexpectedly accepted an event.');
 } catch (ICalendarFeedProviderException $exception) {
     assertTrueValue(str_contains($exception->getMessage(), 'read-only'), 'Write attempts must explain the read-only limitation.');
+}
+
+$persistentFeedCache = [];
+$conditionalClient = new FakeHttpClient([
+    new CalendarHttpResponse(
+        200,
+        [
+            'etag'          => '"feed-cache-1"',
+            'last-modified' => 'Fri, 24 Jul 2026 07:00:00 GMT'
+        ],
+        $icalFeed,
+        'https://calendar.example/cached.ics'
+    )
+]);
+$conditionalProvider = new ICalendarFeedProvider(
+    $conditionalClient,
+    'https://calendar.example/cached.ics',
+    '',
+    [],
+    static function (array $cacheState) use (&$persistentFeedCache): void {
+        $persistentFeedCache = $cacheState;
+    }
+);
+$conditionalProvider->getCalendars();
+assertSameValue('"feed-cache-1"', $persistentFeedCache['etag'], 'The feed ETag must be cached.');
+assertSameValue(
+    'Fri, 24 Jul 2026 07:00:00 GMT',
+    $persistentFeedCache['lastModified'],
+    'The Last-Modified validator must be cached.'
+);
+assertTrueValue($persistentFeedCache['lastDownload'] > 0, 'The successful download time must be cached.');
+$initialChangeTimestamp = $persistentFeedCache['lastChange'];
+
+$notModifiedClient = new FakeHttpClient([
+    new CalendarHttpResponse(304, [], '', 'https://calendar.example/cached.ics')
+]);
+$notModifiedProvider = new ICalendarFeedProvider(
+    $notModifiedClient,
+    'https://calendar.example/cached.ics',
+    '',
+    $persistentFeedCache,
+    static function (array $cacheState) use (&$persistentFeedCache): void {
+        $persistentFeedCache = $cacheState;
+    }
+);
+$notModifiedEvents = $notModifiedProvider->getEvents(
+    'https://calendar.example/cached.ics',
+    new DateTimeImmutable('2026-07-19T00:00:00Z'),
+    new DateTimeImmutable('2026-07-22T00:00:00Z')
+);
+assertSameValue(1, count($notModifiedEvents), 'HTTP 304 must reuse the cached feed body.');
+assertSameValue(
+    '"feed-cache-1"',
+    $notModifiedClient->requests[0]['headers']['If-None-Match'] ?? '',
+    'A cached ETag must be sent with the next request.'
+);
+assertSameValue(
+    'Fri, 24 Jul 2026 07:00:00 GMT',
+    $notModifiedClient->requests[0]['headers']['If-Modified-Since'] ?? '',
+    'A cached Last-Modified value must be sent with the next request.'
+);
+assertSameValue(
+    $initialChangeTimestamp,
+    $persistentFeedCache['lastChange'],
+    'HTTP 304 must not change the last content change timestamp.'
+);
+assertSameValue(false, $persistentFeedCache['stale'], 'HTTP 304 is a successful cache validation.');
+
+$invalidRefreshClient = new FakeHttpClient([
+    new CalendarHttpResponse(200, [], '<html>Temporary error</html>', 'https://calendar.example/cached.ics')
+]);
+$invalidRefreshProvider = new ICalendarFeedProvider(
+    $invalidRefreshClient,
+    'https://calendar.example/cached.ics',
+    '',
+    $persistentFeedCache,
+    static function (array $cacheState) use (&$persistentFeedCache): void {
+        $persistentFeedCache = $cacheState;
+    }
+);
+$fallbackEvents = $invalidRefreshProvider->getEvents(
+    'https://calendar.example/cached.ics',
+    new DateTimeImmutable('2026-07-19T00:00:00Z'),
+    new DateTimeImmutable('2026-07-22T00:00:00Z')
+);
+assertSameValue(1, count($fallbackEvents), 'An invalid replacement must not overwrite the last valid feed.');
+assertSameValue(true, $persistentFeedCache['stale'], 'Fallback data must be marked as stale.');
+assertTrueValue(
+    str_contains($persistentFeedCache['lastError'], 'not a valid iCalendar feed'),
+    'The cache must retain the reason for using stale data.'
+);
+
+$temporaryFailureClient = new FakeHttpClient([
+    new RuntimeException('Temporary network outage'),
+    new RuntimeException('Temporary network outage')
+]);
+$temporaryFailureProvider = new ICalendarFeedProvider(
+    $temporaryFailureClient,
+    'https://calendar.example/cached.ics',
+    '',
+    $persistentFeedCache
+);
+assertSameValue(
+    1,
+    count($temporaryFailureProvider->getEvents(
+        'https://calendar.example/cached.ics',
+        new DateTimeImmutable('2026-07-19T00:00:00Z'),
+        new DateTimeImmutable('2026-07-22T00:00:00Z')
+    )),
+    'A temporary transport failure must use the last valid feed.'
+);
+try {
+    $temporaryFailureProvider->testConnection();
+    throw new RuntimeException('The connection test unexpectedly hid a transport failure behind cached data.');
+} catch (ICalendarFeedProviderException $exception) {
+    assertTrueValue(
+        str_contains($exception->getMessage(), 'Temporary network outage'),
+        'Connection tests must report current transport failures.'
+    );
 }
 
 $secondIcalFeed = str_replace(

@@ -315,6 +315,12 @@
             "type": "Button",
             "caption": "Show account status",
             "onClick": "echo IPSKALACC_GetAccountStatus($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Clear cache",
+            "confirm": "Do you really want to clear all cached calendars and feed data?",
+            "onClick": "IPSKALACC_ClearCache($id); echo 'Cache cleared.';"
         }
     ],
     "status": [

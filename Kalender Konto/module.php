@@ -59,6 +59,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyInteger('RequestTimeout', 30);
 
         $this->RegisterAttributeString('CachedCalendars', '[]');
+        $this->RegisterAttributeString('ICalendarFeedCache', '{}');
         $this->RegisterAttributeInteger('LastSynchronization', 0);
         $this->RegisterAttributeString('LastError', '');
         $this->RegisterAttributeString('GoogleRefreshToken', '');
@@ -412,9 +413,14 @@ class KalenderKonto extends IPSModuleStrict
                     || $this->isGoogleConnected(),
                 'account'             => $this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE
                     ? $this->ReadAttributeString('GoogleAccount')
-                    : trim($this->ReadPropertyString('Username')),
+                    : ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS
+                        ? $this->iCalendarSummary()
+                        : trim($this->ReadPropertyString('Username'))),
                 'lastSynchronization' => $this->ReadAttributeInteger('LastSynchronization'),
-                'lastError'           => $this->ReadAttributeString('LastError')
+                'lastError'           => $this->ReadAttributeString('LastError'),
+                'subscriptionCache'   => $this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS
+                    ? $this->iCalendarCacheStatus()
+                    : []
             ],
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
         );
@@ -423,6 +429,7 @@ class KalenderKonto extends IPSModuleStrict
     public function ClearCache(): void
     {
         $this->WriteAttributeString('CachedCalendars', '[]');
+        $this->WriteAttributeString('ICalendarFeedCache', '{}');
         $this->WriteAttributeInteger('LastSynchronization', 0);
         $this->WriteAttributeString('LastError', '');
     }
@@ -442,6 +449,12 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         $calendars = $this->createProvider()->getCalendars();
+        if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS) {
+            $this->pruneICalendarFeedCache(array_map(
+                static fn(array $calendar): string => (string) ($calendar['id'] ?? ''),
+                $calendars
+            ));
+        }
         if ($this->ReadPropertyInteger('Provider') === self::PROVIDER_GOOGLE) {
             foreach ($calendars as $calendar) {
                 if ((bool) ($calendar['primary'] ?? false)) {
@@ -462,7 +475,12 @@ class KalenderKonto extends IPSModuleStrict
             )
         );
         $this->WriteAttributeInteger('LastSynchronization', time());
-        $this->WriteAttributeString('LastError', '');
+        $this->WriteAttributeString(
+            'LastError',
+            $this->ReadPropertyInteger('Provider') === self::PROVIDER_ICS
+                ? $this->iCalendarCacheWarning()
+                : ''
+        );
 
         return $calendars;
     }
@@ -633,6 +651,7 @@ class KalenderKonto extends IPSModuleStrict
             return new ICalendarSubscriptionProvider(
                 $this->iCalendarSubscriptions(),
                 function (array $subscription): ICalendarFeedProvider {
+                    $subscriptionId = (string) ($subscription['id'] ?? '');
                     return new ICalendarFeedProvider(
                         new CalendarHttpClient(
                             max(5, min(120, $this->ReadPropertyInteger('RequestTimeout'))),
@@ -641,7 +660,11 @@ class KalenderKonto extends IPSModuleStrict
                             (string) ($subscription['password'] ?? '')
                         ),
                         (string) ($subscription['url'] ?? ''),
-                        (string) ($subscription['name'] ?? '')
+                        (string) ($subscription['name'] ?? ''),
+                        $this->readICalendarFeedCache($subscriptionId),
+                        function (array $cacheState) use ($subscriptionId): void {
+                            $this->writeICalendarFeedCache($subscriptionId, $cacheState);
+                        }
                     );
                 }
             );
@@ -993,6 +1016,164 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         return $url;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function readICalendarFeedCache(string $subscriptionId): array
+    {
+        if ($subscriptionId === '') {
+            return [];
+        }
+
+        $entries = $this->readICalendarFeedCacheEntries();
+        $entry = $entries[$subscriptionId] ?? null;
+        if (!is_array($entry)) {
+            return [];
+        }
+
+        $encodedBody = (string) ($entry['bodyData'] ?? '');
+        $body = base64_decode($encodedBody, true);
+        if (!is_string($body)) {
+            return [];
+        }
+        if (($entry['encoding'] ?? '') === 'gzip-base64') {
+            if (!function_exists('gzdecode')) {
+                return [];
+            }
+            $decoded = gzdecode($body);
+            if (!is_string($decoded)) {
+                return [];
+            }
+            $body = $decoded;
+        } elseif (($entry['encoding'] ?? '') !== 'base64') {
+            return [];
+        }
+
+        unset($entry['bodyData'], $entry['encoding']);
+        $entry['body'] = $body;
+
+        return $entry;
+    }
+
+    /**
+     * @param array<string, mixed> $cacheState
+     */
+    private function writeICalendarFeedCache(string $subscriptionId, array $cacheState): void
+    {
+        if ($subscriptionId === '') {
+            return;
+        }
+
+        $body = (string) ($cacheState['body'] ?? '');
+        if ($body === '') {
+            return;
+        }
+
+        $encoding = 'base64';
+        $bodyData = $body;
+        if (function_exists('gzencode')) {
+            $compressed = gzencode($body, 6);
+            if (is_string($compressed) && strlen($compressed) < strlen($body)) {
+                $encoding = 'gzip-base64';
+                $bodyData = $compressed;
+            }
+        }
+
+        unset($cacheState['body']);
+        $cacheState['encoding'] = $encoding;
+        $cacheState['bodyData'] = base64_encode($bodyData);
+
+        $entries = $this->readICalendarFeedCacheEntries();
+        $entries[$subscriptionId] = $cacheState;
+        $this->WriteAttributeString(
+            'ICalendarFeedCache',
+            json_encode(
+                $entries,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            )
+        );
+        $this->WriteAttributeString('LastError', $this->iCalendarCacheWarning());
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    private function readICalendarFeedCacheEntries(): array
+    {
+        try {
+            $entries = json_decode(
+                $this->ReadAttributeString('ICalendarFeedCache'),
+                true,
+                512,
+                JSON_THROW_ON_ERROR
+            );
+            return is_array($entries) ? array_filter($entries, 'is_array') : [];
+        } catch (JsonException) {
+            return [];
+        }
+    }
+
+    /**
+     * @param list<string> $activeIds
+     */
+    private function pruneICalendarFeedCache(array $activeIds): void
+    {
+        $activeIds = array_fill_keys(array_filter($activeIds), true);
+        $entries = array_intersect_key($this->readICalendarFeedCacheEntries(), $activeIds);
+        $this->WriteAttributeString(
+            'ICalendarFeedCache',
+            json_encode(
+                $entries,
+                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+            )
+        );
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function iCalendarCacheStatus(): array
+    {
+        $entries = $this->readICalendarFeedCacheEntries();
+        $status = [];
+        foreach ($this->iCalendarSubscriptions() as $subscription) {
+            $id = hash('sha256', 'ics|' . $this->iCalendarUrlKey((string) ($subscription['url'] ?? '')));
+            $entry = is_array($entries[$id] ?? null) ? $entries[$id] : [];
+            $status[] = [
+                'id'           => $id,
+                'name'         => (string) ($subscription['name'] ?? ''),
+                'lastCheck'    => (int) ($entry['lastCheck'] ?? 0),
+                'lastDownload' => (int) ($entry['lastDownload'] ?? 0),
+                'lastChange'   => (int) ($entry['lastChange'] ?? 0),
+                'stale'        => (bool) ($entry['stale'] ?? false),
+                'lastError'    => $this->sanitizeError((string) ($entry['lastError'] ?? ''))
+            ];
+        }
+
+        return $status;
+    }
+
+    private function iCalendarCacheWarning(): string
+    {
+        $staleFeeds = array_values(array_filter(
+            $this->iCalendarCacheStatus(),
+            static fn(array $status): bool => (bool) ($status['stale'] ?? false)
+        ));
+        if ($staleFeeds === []) {
+            return '';
+        }
+
+        $names = array_map(
+            static fn(array $status): string => trim((string) ($status['name'] ?? '')) ?: 'iCalendar',
+            $staleFeeds
+        );
+
+        return sprintf(
+            $this->Translate('Using the last valid cached data for: %s.'),
+            implode(', ', $names)
+        );
     }
 
     private function encodeResponse(

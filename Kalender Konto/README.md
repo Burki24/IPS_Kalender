@@ -11,6 +11,7 @@ Das Modul verwaltet die Verbindung zu einem Online-Kalenderkonto und stellt die 
 - CalDAV-Discovery von Principal, Calendar Home Set und Kalendern
 - Erkennung von Kalendername, Beschreibung, Farbe und Zugriffsrechten
 - Zwischenspeicherung der gefundenen Kalender
+- persistenter iCalendar-Feed-Cache mit HTTP-Validierung und Rückfallebene
 - zyklische Synchronisation
 - einheitlicher Datenfluss zum Kalender-Konfigurator und zu Kalenderinstanzen
 - Lesen, Erstellen, Bearbeiten und Löschen von Google-Terminen entsprechend der Kalenderrechte
@@ -101,6 +102,35 @@ iCalendar-Abonnements sind grundsätzlich schreibgeschützt. Die Feed-URL kann �
 Terminserien aus einem Feed werden lokal für den von der Kalenderinstanz angeforderten Zeitraum aufgelöst. Unterstützt werden tägliche, wöchentliche, monatliche und jährliche `RRULE`-Serien einschließlich `INTERVAL`, `COUNT`, `UNTIL`, `BYDAY`, `BYMONTH`, `BYMONTHDAY`, `BYSETPOS` und `WKST`. `RDATE` ergänzt einzelne Vorkommen, `EXDATE` entfernt sie und über `RECURRENCE-ID` gelieferte Änderungen oder Absagen ersetzen das zugehörige Serienvorkommen. Lokale Uhrzeiten werden in der angegebenen Zeitzone erzeugt, sodass sie auch über Sommer- und Winterzeitwechsel konstant bleiben.
 
 Geheime Feed-Adressen werden nicht in die Terminvariable oder die Konfiguration einer erzeugten Kalenderinstanz übernommen. Sie verbleiben in der zugehörigen Konto-Instanz.
+
+#### Robuste Feed-Aktualisierung
+
+Jedes aktive iCalendar-Abonnement besitzt einen eigenen persistenten
+Feed-Cache:
+
+- Liefert der Server `ETag` oder `Last-Modified`, sendet das Modul bei der
+  nächsten Abfrage `If-None-Match` beziehungsweise `If-Modified-Since`.
+- Bei `304 Not Modified` wird die bereits geprüfte lokale Feed-Version
+  wiederverwendet.
+- Bei einer neuen gültigen Antwort werden Downloadzeitpunkt und Zeitpunkt der
+  letzten tatsächlichen Inhaltsänderung getrennt gespeichert.
+- Leere Antworten, HTML-Fehlerseiten oder syntaktisch ungültige
+  iCalendar-Antworten ersetzen niemals den letzten gültigen Feed.
+- Bei vorübergehenden Netzwerkproblemen, HTTP `408`, `425`, `429` oder
+  Serverfehlern ab `500` werden weiterhin die letzten gültigen Kalenderdaten
+  geliefert und als veraltet markiert.
+- Authentifizierungsfehler und dauerhafte Clientfehler wie `404` werden nicht
+  durch Cache-Daten verborgen.
+
+**Verbindung testen** prüft immer den aktuellen Serverzustand. Der Test meldet
+einen Fehler, selbst wenn noch eine verwendbare ältere Feed-Version vorhanden
+ist. Dadurch bleibt die Kalenderanzeige robust, ohne Konfigurations- oder
+Zugriffsprobleme zu verschleiern.
+
+**Kontostatus anzeigen** enthält je Abonnement `lastCheck`, `lastDownload`,
+`lastChange`, `stale` und `lastError`. Feed-Adressen und Feed-Inhalte werden
+dabei nicht ausgegeben. **Cache leeren** entfernt sowohl die gefundenen
+Kalender als auch sämtliche gespeicherten Feed-Versionen.
 
 ## Datenfluss
 
