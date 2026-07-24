@@ -783,6 +783,7 @@ foreach ([
 
 $calendarModuleSource = file_get_contents(__DIR__ . '/../Kalender/module.php');
 $accountModuleSource = file_get_contents(__DIR__ . '/../Kalender Konto/module.php');
+$accountGoogleOAuthSource = file_get_contents(__DIR__ . '/../Kalender Konto/traits/GoogleOAuthTrait.php');
 $viewModuleSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.php');
 $viewTemplateSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.html');
 assertTrueValue(
@@ -790,8 +791,9 @@ assertTrueValue(
         && str_contains($accountModuleSource, "RegisterPropertyString('GoogleClientID'")
         && str_contains($accountModuleSource, "RegisterPropertyString('GoogleClientSecret'")
         && str_contains($accountModuleSource, 'RegisterHook($this->googleOAuthHookAddress())')
-        && str_contains($accountModuleSource, 'protected function ProcessHookData(): void')
-        && !str_contains($accountModuleSource, "RegisterOAuth('ipskalender_google')"),
+        && is_string($accountGoogleOAuthSource)
+        && str_contains($accountGoogleOAuthSource, 'protected function ProcessHookData(): void')
+        && !str_contains($accountModuleSource . $accountGoogleOAuthSource, "RegisterOAuth('ipskalender_google')"),
     'The calendar account must use a personal Google OAuth client with an instance-specific webhook.'
 );
 assertTrueValue(

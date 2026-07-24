@@ -49,6 +49,9 @@ jobs:
       - name: Run OpenCalendar tests
         run: php tests/run.php
 
+      - name: Run account module structure tests
+        run: php tests/account-module.php
+
       - name: Run CalDAV provider tests
         run: php tests/caldav.php
 
