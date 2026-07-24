@@ -56,6 +56,21 @@
             ]
         },
         {
+            "type": "Select",
+            "name": "TileWeekOrientation",
+            "caption": "Tile week orientation",
+            "options": [
+                {
+                    "caption": "Horizontal",
+                    "value": 0
+                },
+                {
+                    "caption": "Vertical",
+                    "value": 1
+                }
+            ]
+        },
+        {
             "type": "RowLayout",
             "items": [
                 {

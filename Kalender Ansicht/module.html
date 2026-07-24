@@ -665,8 +665,12 @@
         const weekStart = startOfWeek(cursorDate);
         const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index))
             .filter(day => calendarState.settings.showWeekends !== false || !isWeekend(day));
-        const vertical = document.documentElement.classList.contains('ipsview-mode')
-            && calendarState.settings.ipsViewWeekOrientation === 'vertical';
+        const ipsView = document.documentElement.classList.contains('ipsview-mode');
+        const vertical = (
+            ipsView
+                ? calendarState.settings.ipsViewWeekOrientation
+                : calendarState.settings.tileWeekOrientation
+        ) === 'vertical';
         renderDayColumns(
             days,
             'week-grid'
