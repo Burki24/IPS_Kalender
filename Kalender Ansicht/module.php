@@ -250,15 +250,22 @@ class KalenderAnsicht extends IPSModuleStrict
             $colorBarWidth = max(2, min(16, $this->ReadPropertyInteger('IPSViewColorBarWidth')));
             $html = str_replace(
                 '<html lang="en">',
-                sprintf(
-                    '<html lang="de" class="%s" style="--ipsview-font-scale: %d%%; --agenda-color-bar-width: %dpx; --compact-color-bar-width: %dpx;">',
-                    implode(' ', $classes),
-                    $fontScale,
-                    $colorBarWidth,
-                    $colorBarWidth
-                ),
+                '<html lang="de" class="' . implode(' ', $classes) . '">',
                 $html
             );
+            $ipsViewStyle = sprintf(
+                '<style id="ipsview-settings">'
+                . 'html.ipsview-mode {'
+                . 'font-size:%d%% !important;'
+                . '--agenda-color-bar-width:%dpx !important;'
+                . '--compact-color-bar-width:%dpx !important;'
+                . '}'
+                . '</style>',
+                $fontScale,
+                $colorBarWidth,
+                $colorBarWidth
+            );
+            $html = str_replace('</head>', $ipsViewStyle . '</head>', $html);
             foreach ([
                 'Agenda', '3 Days', 'Week', 'Month', 'Previous', 'Today', 'Next', 'Refresh',
                 'No calendars selected', 'Select at least one calendar in the instance configuration.',
