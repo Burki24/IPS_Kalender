@@ -6,6 +6,7 @@ Die Kalender Ansicht fasst Termine mehrerer Kalenderinstanzen in einer responsiv
 
 - Agenda-, 3-Tage-, Wochen- und Monatsansicht
 - unabhängig wählbare horizontale oder vertikale Wochenansicht für Tile und IPSView
+- optionale Anzeige des Tages im Jahr in den Tagesüberschriften
 - Zusammenführen beliebig vieler ausgewählter Kalender
 - Farbliche Zuordnung der Termine zu ihren Kalendern
 - Optionale Anzeige von Kalendername, Ort und Beschreibung
@@ -28,7 +29,7 @@ Wiederkehrende, vom CalDAV-Server expandierte Einzeltermine werden derzeit nur l
 
 1. Eine Instanz `Kalender Ansicht` erstellen.
 2. In der Liste `Kalender` die gewünschten Kalenderinstanzen auswählen und aktivieren.
-3. Standardansicht, Tile-Wochenausrichtung, Zeitraum, maximale Terminanzahl und die gewünschten Detailfelder festlegen.
+3. Standardansicht, Tile-Wochenausrichtung, Zeitraum, maximale Terminanzahl und die gewünschten Detailfelder einschließlich der optionalen Anzeige des Tages im Jahr festlegen.
 4. Die Instanz in der Kachelvisualisierung platzieren.
 
 ### IPSView

@@ -732,5 +732,14 @@ assertTrueValue(
         && str_contains($viewTemplateSource, 'Date.UTC'),
     'The weekly tile and IPSView title must include an ISO calendar week.'
 );
+assertTrueValue(
+    is_string($viewModuleSource)
+        && str_contains($viewModuleSource, "RegisterPropertyBoolean('ShowDayOfYear', true)")
+        && is_string($viewTemplateSource)
+        && str_contains($viewTemplateSource, 'formatDayHeading(')
+        && str_contains($viewTemplateSource, 'dayOfYear(date)')
+        && str_contains($viewTemplateSource, 'daysInYear(date)'),
+    'Agenda, three-day and weekly headings must optionally show the day of year.'
+);
 
 echo "All IPS_Kalender tests passed.\n";

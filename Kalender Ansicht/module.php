@@ -22,6 +22,7 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyInteger('FutureDays', 31);
         $this->RegisterPropertyInteger('MaxEvents', 250);
         $this->RegisterPropertyBoolean('ShowWeekends', true);
+        $this->RegisterPropertyBoolean('ShowDayOfYear', true);
         $this->RegisterPropertyBoolean('ShowCalendarName', true);
         $this->RegisterPropertyBoolean('ShowLocation', true);
         $this->RegisterPropertyBoolean('ShowDescription', false);
@@ -310,7 +311,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 $html
             );
             foreach ([
-                'Agenda', '3 Days', 'Week', 'Month', 'CW', 'Previous', 'Today', 'Next', 'Refresh',
+                'Agenda', '3 Days', 'Week', 'Month', 'CW', 'Day', 'Previous', 'Today', 'Next', 'Refresh',
                 'No calendars selected', 'Select at least one calendar in the instance configuration.',
                 'No events', 'There are no events in this period.', 'All day', 'Untitled event',
                 'more', 'Create event', 'Event details', 'Calendar', 'Title', 'Start', 'End', 'Location',
@@ -424,6 +425,7 @@ class KalenderAnsicht extends IPSModuleStrict
                 default => 'agenda'
             },
             'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),
+            'showDayOfYear'    => $this->ReadPropertyBoolean('ShowDayOfYear'),
             'showCalendarName' => $this->ReadPropertyBoolean('ShowCalendarName'),
             'showLocation'     => $this->ReadPropertyBoolean('ShowLocation'),
             'showDescription'  => $this->ReadPropertyBoolean('ShowDescription'),

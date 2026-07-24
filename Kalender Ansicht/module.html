@@ -623,7 +623,10 @@
             const strong = document.createElement('strong');
             strong.textContent = relativeDay(group.date);
             const fullDate = document.createElement('span');
-            fullDate.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'long', day: '2-digit', month: 'long' }).format(group.date);
+            fullDate.textContent = formatDayHeading(
+                group.date,
+                { weekday: 'long', day: '2-digit', month: 'long' }
+            );
             heading.append(strong, fullDate);
             section.appendChild(heading);
             group.events.forEach(event => section.appendChild(createAgendaEvent(event)));
@@ -688,7 +691,10 @@
         days.forEach(day => {
             const column = element('section', 'week-column' + (isToday(day) ? ' today' : ''));
             const heading = element('div', 'week-heading');
-            heading.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: '2-digit', month: '2-digit' }).format(day);
+            heading.textContent = formatDayHeading(
+                day,
+                { weekday: 'short', day: '2-digit', month: '2-digit' }
+            );
             column.appendChild(heading);
             const eventList = element('div', 'week-events');
             const dayEnd = addDays(day, 1);
@@ -1034,6 +1040,21 @@
         target.setUTCDate(target.getUTCDate() + 4 - weekday);
         const yearStart = new Date(Date.UTC(target.getUTCFullYear(), 0, 1));
         return Math.ceil((((target - yearStart) / 86400000) + 1) / 7);
+    }
+    function dayOfYear(date) {
+        return Math.floor((
+            Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
+            - Date.UTC(date.getFullYear(), 0, 0)
+        ) / 86400000);
+    }
+    function daysInYear(date) {
+        const year = date.getFullYear();
+        return new Date(year, 1, 29).getMonth() === 1 ? 366 : 365;
+    }
+    function formatDayHeading(date, options) {
+        const formattedDate = new Intl.DateTimeFormat(undefined, options).format(date);
+        if (calendarState.settings.showDayOfYear === false) return formattedDate;
+        return `${formattedDate} · ${t('Day')} ${dayOfYear(date)}/${daysInYear(date)}`;
     }
     function addDays(date, days) { const result = new Date(date); result.setDate(result.getDate() + days); return result; }
     function isWeekend(date) { return date.getDay() === 0 || date.getDay() === 6; }
