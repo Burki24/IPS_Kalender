@@ -706,4 +706,21 @@ assertSameValue(
     'Manual synchronization must never be triggered by the scheduler.'
 );
 
+$calendarModuleSource = file_get_contents(__DIR__ . '/../Kalender/module.php');
+$viewModuleSource = file_get_contents(__DIR__ . '/../Kalender Ansicht/module.php');
+assertTrueValue(
+    is_string($calendarModuleSource)
+        && str_contains($calendarModuleSource, 'RegisterMessage(0, IPS_KERNELSTARTED)')
+        && str_contains($calendarModuleSource, "RegisterTimer('InitializationTimer'")
+        && str_contains($calendarModuleSource, 'IPS_GetKernelRunlevel() !== KR_READY'),
+    'The calendar module must defer parent communication until the kernel is ready.'
+);
+assertTrueValue(
+    is_string($viewModuleSource)
+        && str_contains($viewModuleSource, 'RegisterMessage(0, IPS_KERNELSTARTED)')
+        && str_contains($viewModuleSource, "RegisterTimer('InitializationTimer'")
+        && str_contains($viewModuleSource, 'IPS_GetKernelRunlevel() !== KR_READY'),
+    'The calendar view must defer cross-instance access until the kernel is ready.'
+);
+
 echo "All IPS_Kalender tests passed.\n";

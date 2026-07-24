@@ -9,16 +9,20 @@ require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 class Kalender extends IPSModuleStrict
 {
     private const DATA_ID_TO_PARENT = '{4E535B1D-69C7-AC77-1372-0282B21BAEC9}';
+    private const INITIALIZATION_DELAY_MS = 3_000;
 
     private const STATUS_CONFIGURATION_MISSING = 201;
     private const STATUS_SYNCHRONIZATION_FAILED = 202;
     private const STATUS_INVALID_RESPONSE = 203;
     private const STATUS_WRITE_CONFLICT = 204;
 
+    private bool $runtimeReady = false;
+
     public function Create(): void
     {
         parent::Create();
 
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->RegisterPropertyBoolean('Active', true);
         $this->RegisterPropertyString('CalendarID', '');
         $this->RegisterPropertyString('ProviderCalendarID', '');
@@ -41,6 +45,7 @@ class Kalender extends IPSModuleStrict
         $this->RegisterVariableInteger('LastSynchronization', 'Last synchronization', '~UnixTimestamp', 20);
         $this->RegisterVariableString('Events', 'Events', '', 30);
 
+        $this->RegisterTimer('InitializationTimer', 0, 'IPSKAL_Initialize($_IPS[\'TARGET\']);');
         $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKAL_ScheduledSynchronize($_IPS[\'TARGET\']);');
     }
 
@@ -80,20 +85,47 @@ class Kalender extends IPSModuleStrict
     {
         parent::ApplyChanges();
 
+        $this->runtimeReady = false;
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
+        $this->SetTimerInterval('InitializationTimer', 0);
+        $this->SetTimerInterval('SynchronizationTimer', 0);
+
         $validationError = $this->validateConfiguration();
         if ($validationError !== '') {
-            $this->SetTimerInterval('SynchronizationTimer', 0);
             $this->WriteAttributeString('LastError', $validationError);
             $this->SetStatus(self::STATUS_CONFIGURATION_MISSING);
             return;
         }
 
         if (!$this->ReadPropertyBoolean('Active')) {
-            $this->SetTimerInterval('SynchronizationTimer', 0);
             $this->SetStatus(IS_INACTIVE);
             return;
         }
 
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+
+        $this->scheduleInitialization();
+    }
+
+    public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
+    {
+        if ($SenderID === 0 && $Message === IPS_KERNELSTARTED) {
+            $this->scheduleInitialization();
+        }
+    }
+
+    public function Initialize(): bool
+    {
+        $this->SetTimerInterval('InitializationTimer', 0);
+        if (IPS_GetKernelRunlevel() !== KR_READY
+            || !$this->ReadPropertyBoolean('Active')
+            || $this->validateConfiguration() !== '') {
+            return false;
+        }
+
+        $this->runtimeReady = true;
         $this->SetTimerInterval(
             'SynchronizationTimer',
             SynchronizationSchedule::timerInterval(
@@ -103,6 +135,8 @@ class Kalender extends IPSModuleStrict
         );
         $this->refreshCalendarMetadataSafely();
         $this->SetStatus(IS_ACTIVE);
+
+        return true;
     }
 
     public function ScheduledSynchronize(): bool
@@ -236,7 +270,9 @@ class Kalender extends IPSModuleStrict
 
     public function GetCalendarStatus(): string
     {
-        $this->refreshCalendarMetadataSafely();
+        if ($this->runtimeReady && IPS_GetKernelRunlevel() === KR_READY) {
+            $this->refreshCalendarMetadataSafely();
+        }
         $metadataAvailable = $this->ReadAttributeBoolean('CalendarMetadataAvailable');
         $detectedColor = $this->ReadAttributeString('DetectedCalendarColor');
 
@@ -340,6 +376,9 @@ class Kalender extends IPSModuleStrict
      */
     private function sendRequest(string $operation, array $additionalData = []): array
     {
+        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+            throw new RuntimeException('The calendar instance is still initializing.');
+        }
         if (!$this->HasActiveParent()) {
             throw new RuntimeException('No active calendar account is connected.');
         }
@@ -372,6 +411,13 @@ class Kalender extends IPSModuleStrict
         }
 
         return $payload;
+    }
+
+    private function scheduleInitialization(): void
+    {
+        if (IPS_GetKernelRunlevel() === KR_READY && $this->ReadPropertyBoolean('Active')) {
+            $this->SetTimerInterval('InitializationTimer', self::INITIALIZATION_DELAY_MS);
+        }
     }
 
     /**

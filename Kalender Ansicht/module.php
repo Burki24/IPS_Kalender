@@ -5,14 +5,18 @@ declare(strict_types=1);
 class KalenderAnsicht extends IPSModuleStrict
 {
     private const CALENDAR_MODULE_ID = '{227B63E4-4223-316B-76E9-FD3849689562}';
+    private const INITIALIZATION_DELAY_MS = 5_000;
 
     private const STATUS_NO_CALENDARS = 201;
     private const STATUS_INVALID_CONFIGURATION = 202;
+
+    private bool $runtimeReady = false;
 
     public function Create(): void
     {
         parent::Create();
 
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
         $this->RegisterPropertyString('Calendars', '[]');
         $this->RegisterPropertyInteger('DefaultView', 0);
         $this->RegisterPropertyInteger('TileWeekOrientation', 0);
@@ -31,12 +35,16 @@ class KalenderAnsicht extends IPSModuleStrict
         $this->RegisterPropertyInteger('IPSViewWeekOrientation', 0);
 
         $this->SetVisualizationType(1);
+        $this->RegisterTimer('InitializationTimer', 0, 'IPSKALVIEW_Initialize($_IPS[\'TARGET\']);');
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
 
+        $this->runtimeReady = false;
+        $this->RegisterMessage(0, IPS_KERNELSTARTED);
+        $this->SetTimerInterval('InitializationTimer', 0);
         $this->MaintainVariable(
             'IPSViewCalendar',
             'IPSView calendar',
@@ -46,12 +54,30 @@ class KalenderAnsicht extends IPSModuleStrict
             $this->ReadPropertyBoolean('EnableIPSView')
         );
 
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+
+        $this->scheduleInitialization();
+    }
+
+    public function Initialize(): bool
+    {
+        $this->SetTimerInterval('InitializationTimer', 0);
+        if (IPS_GetKernelRunlevel() !== KR_READY) {
+            return false;
+        }
+
         foreach ($this->GetMessageList() as $senderId => $messageIds) {
             foreach ($messageIds as $messageId) {
+                if ((int) $senderId === 0 && (int) $messageId === IPS_KERNELSTARTED) {
+                    continue;
+                }
                 $this->UnregisterMessage($senderId, $messageId);
             }
         }
 
+        $this->runtimeReady = true;
         try {
             $calendars = $this->getSelectedCalendars();
             foreach ($calendars as $calendar) {
@@ -70,10 +96,20 @@ class KalenderAnsicht extends IPSModuleStrict
         }
 
         $this->broadcastState();
+
+        return true;
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
     {
+        if ($SenderID === 0 && $Message === IPS_KERNELSTARTED) {
+            $this->scheduleInitialization();
+            return;
+        }
+        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+
         $this->broadcastState();
     }
 
@@ -193,6 +229,10 @@ class KalenderAnsicht extends IPSModuleStrict
 
     private function broadcastState(): void
     {
+        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+            return;
+        }
+
         try {
             $state = $this->buildState();
         } catch (Throwable $exception) {
@@ -305,6 +345,10 @@ class KalenderAnsicht extends IPSModuleStrict
      */
     private function buildState(): array
     {
+        if (!$this->runtimeReady || IPS_GetKernelRunlevel() !== KR_READY) {
+            return $this->emptyState();
+        }
+
         $calendars = $this->getSelectedCalendars();
         $events = [];
         $pastDays = max(0, min(1095, $this->ReadPropertyInteger('PastDays')));
@@ -351,25 +395,53 @@ class KalenderAnsicht extends IPSModuleStrict
             'events'      => $events,
             'calendars'   => array_values($calendars),
             'generatedAt' => time(),
-            'settings'    => [
-                'defaultView'      => match ($this->ReadPropertyInteger('DefaultView')) {
-                    1       => 'week',
-                    2       => 'month',
-                    3       => 'threeDays',
-                    default => 'agenda'
-                },
-                'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),
-                'showCalendarName' => $this->ReadPropertyBoolean('ShowCalendarName'),
-                'showLocation'     => $this->ReadPropertyBoolean('ShowLocation'),
-                'showDescription'  => $this->ReadPropertyBoolean('ShowDescription'),
-                'tileWeekOrientation' => $this->ReadPropertyInteger('TileWeekOrientation') === 1
-                    ? 'vertical'
-                    : 'horizontal',
-                'ipsViewWeekOrientation' => $this->ReadPropertyInteger('IPSViewWeekOrientation') === 1
-                    ? 'vertical'
-                    : 'horizontal'
-            ]
+            'settings'    => $this->viewSettings()
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyState(): array
+    {
+        return [
+            'events'      => [],
+            'calendars'   => [],
+            'generatedAt' => time(),
+            'settings'    => $this->viewSettings()
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function viewSettings(): array
+    {
+        return [
+            'defaultView'      => match ($this->ReadPropertyInteger('DefaultView')) {
+                1       => 'week',
+                2       => 'month',
+                3       => 'threeDays',
+                default => 'agenda'
+            },
+            'showWeekends'     => $this->ReadPropertyBoolean('ShowWeekends'),
+            'showCalendarName' => $this->ReadPropertyBoolean('ShowCalendarName'),
+            'showLocation'     => $this->ReadPropertyBoolean('ShowLocation'),
+            'showDescription'  => $this->ReadPropertyBoolean('ShowDescription'),
+            'tileWeekOrientation' => $this->ReadPropertyInteger('TileWeekOrientation') === 1
+                ? 'vertical'
+                : 'horizontal',
+            'ipsViewWeekOrientation' => $this->ReadPropertyInteger('IPSViewWeekOrientation') === 1
+                ? 'vertical'
+                : 'horizontal'
+        ];
+    }
+
+    private function scheduleInitialization(): void
+    {
+        if (IPS_GetKernelRunlevel() === KR_READY) {
+            $this->SetTimerInterval('InitializationTimer', self::INITIALIZATION_DELAY_MS);
+        }
     }
 
     /**
