@@ -522,18 +522,16 @@ class KalenderKonto extends IPSModuleStrict
      */
     private function resolveCalendar(string $calendarId): array
     {
-        if ($calendarId === '') {
-            throw new InvalidArgumentException('The calendar ID is missing.');
-        }
-
         $calendars = json_decode($this->ReadAttributeString('CachedCalendars'), true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($calendars)) {
             $calendars = [];
         }
-        foreach ($calendars as $calendar) {
-            if (is_array($calendar) && (string) ($calendar['id'] ?? '') === $calendarId
-                && $this->calendarReference($calendar) !== '') {
-                return $calendar;
+        if ($calendarId !== '') {
+            foreach ($calendars as $calendar) {
+                if (is_array($calendar) && (string) ($calendar['id'] ?? '') === $calendarId
+                    && $this->calendarReference($calendar) !== '') {
+                    return $calendar;
+                }
             }
         }
         $fallback = $this->singleCalendarFallback($calendars);
@@ -542,15 +540,21 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         $calendars = $this->discoverCalendars();
-        foreach ($calendars as $calendar) {
-            if ((string) ($calendar['id'] ?? '') === $calendarId
-                && $this->calendarReference($calendar) !== '') {
-                return $calendar;
+        if ($calendarId !== '') {
+            foreach ($calendars as $calendar) {
+                if ((string) ($calendar['id'] ?? '') === $calendarId
+                    && $this->calendarReference($calendar) !== '') {
+                    return $calendar;
+                }
             }
         }
         $fallback = $this->singleCalendarFallback($calendars);
         if ($fallback !== null) {
             return $fallback;
+        }
+
+        if ($calendarId === '') {
+            throw new InvalidArgumentException('The calendar ID is missing.');
         }
 
         throw new RuntimeException('The selected calendar is no longer available in this account.');
@@ -559,7 +563,7 @@ class KalenderKonto extends IPSModuleStrict
     /**
      * A single-feed ICS/Webcal account always exposes exactly one calendar.
      * Keep an existing child usable when its gateway or the feed URL changes
-     * and its URL-derived calendar ID therefore no longer matches.
+     * and its URL-derived calendar ID is missing or no longer matches.
      *
      * @param array<mixed> $calendars
      * @return array<string, mixed>|null
@@ -580,7 +584,7 @@ class KalenderKonto extends IPSModuleStrict
 
         $this->SendDebug(
             'CalendarResolution',
-            'Using the only calendar exposed by the ICS/Webcal account because the stored calendar ID no longer matches.',
+            'Using the only calendar exposed by the ICS/Webcal account because the stored calendar ID is missing or no longer matches.',
             0
         );
 

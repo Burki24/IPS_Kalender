@@ -429,11 +429,10 @@ class Kalender extends IPSModuleStrict
         if (!SynchronizationSchedule::isValid($this->ReadPropertyInteger('UpdateSchedule'))) {
             return 'The synchronization schedule is invalid.';
         }
-        if (trim($this->ReadPropertyString('CalendarID')) === '') {
+        if (trim($this->ReadPropertyString('CalendarID')) === ''
+            && trim($this->ReadPropertyString('ProviderCalendarID')) === ''
+            && !$this->HasActiveParent()) {
             return 'The calendar ID is missing.';
-        }
-        if (trim($this->ReadPropertyString('ProviderCalendarID')) === '') {
-            return 'The provider calendar ID is missing.';
         }
         return '';
     }
