@@ -12,6 +12,7 @@ use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\OAuthBridgeClient;
 use IPSKalender\OAuthBridgeException;
+use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/CalendarProviderInterface.php';
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
@@ -19,6 +20,7 @@ require_once __DIR__ . '/../libs/CalDAVProvider.php';
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
+require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
 class KalenderKonto extends IPSModuleStrict
 {
@@ -48,6 +50,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterPropertyString('Username', '');
         $this->RegisterPropertyString('Password', '');
         $this->RegisterPropertyString('CalendarName', '');
+        $this->RegisterPropertyInteger('UpdateSchedule', SynchronizationSchedule::CUSTOM);
         $this->RegisterPropertyInteger('UpdateInterval', 15);
         $this->RegisterPropertyBoolean('VerifyTLS', true);
         $this->RegisterPropertyInteger('RequestTimeout', 30);
@@ -58,7 +61,7 @@ class KalenderKonto extends IPSModuleStrict
         $this->RegisterAttributeString('GoogleRefreshToken', '');
         $this->RegisterAttributeString('GoogleAccount', '');
 
-        $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_Synchronize($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKALACC_ScheduledSynchronize($_IPS[\'TARGET\']);');
         $this->RegisterOAuth(self::GOOGLE_OAUTH_IDENTIFIER);
     }
 
@@ -88,6 +91,8 @@ class KalenderKonto extends IPSModuleStrict
                 $element['visible'] = $isPasswordProvider;
             } elseif ($name === 'CalendarName') {
                 $element['visible'] = $isIcs;
+            } elseif ($name === 'UpdateInterval') {
+                $element['visible'] = $this->ReadPropertyInteger('UpdateSchedule') === SynchronizationSchedule::CUSTOM;
             } elseif (in_array($name, ['GoogleStatus', 'GoogleConnect', 'GoogleDisconnect'], true)) {
                 $element['visible'] = $isGoogle;
                 if ($name === 'GoogleStatus') {
@@ -148,6 +153,15 @@ class KalenderKonto extends IPSModuleStrict
         }
 
         $this->UpdateFormField('ServerURL', 'enabled', false);
+    }
+
+    public function UpdateScheduleForm(int $schedule): void
+    {
+        $this->UpdateFormField(
+            'UpdateInterval',
+            'visible',
+            $schedule === SynchronizationSchedule::CUSTOM
+        );
     }
 
     public function ConnectGoogle(): string
@@ -218,9 +232,27 @@ class KalenderKonto extends IPSModuleStrict
             return;
         }
 
-        $interval = max(1, $this->ReadPropertyInteger('UpdateInterval'));
-        $this->SetTimerInterval('SynchronizationTimer', $interval * 60 * 1000);
+        $this->SetTimerInterval(
+            'SynchronizationTimer',
+            SynchronizationSchedule::timerInterval(
+                $this->ReadPropertyInteger('UpdateSchedule'),
+                $this->ReadPropertyInteger('UpdateInterval')
+            )
+        );
         $this->SetStatus(IS_ACTIVE);
+    }
+
+    public function ScheduledSynchronize(): bool
+    {
+        if (!SynchronizationSchedule::isDue(
+            $this->ReadPropertyInteger('UpdateSchedule'),
+            $this->ReadPropertyInteger('UpdateInterval'),
+            $this->ReadAttributeInteger('LastSynchronization')
+        )) {
+            return true;
+        }
+
+        return $this->Synchronize();
     }
 
     public function ForwardData(string $JSONString): string
@@ -560,6 +592,9 @@ class KalenderKonto extends IPSModuleStrict
     private function validateConfiguration(): string
     {
         $provider = $this->ReadPropertyInteger('Provider');
+        if (!SynchronizationSchedule::isValid($this->ReadPropertyInteger('UpdateSchedule'))) {
+            return 'The synchronization schedule is invalid.';
+        }
         if (!in_array($provider, [
             self::PROVIDER_APPLE,
             self::PROVIDER_CALDAV,

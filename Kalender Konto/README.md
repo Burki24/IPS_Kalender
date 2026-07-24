@@ -39,11 +39,14 @@ Server-URL | Bei Apple vorbelegt; ansonsten URL des CalDAV-Servers beziehungswei
 Kalendername | Optionale Bezeichnung eines iCalendar-Abonnements; ohne Angabe wird `X-WR-CALNAME` verwendet
 Benutzername | Benutzername beziehungsweise E-Mail-Adresse des Kontos; bei iCalendar optional
 Passwort | Passwort oder anwendungsspezifisches Passwort; bei iCalendar optional
-Aktualisierungsintervall | Abstand der Kalenderabfragen in Minuten
+Aktualisierungsplan | Vorgegebener Rhythmus von fünf Minuten bis jährlich oder ausschließlich manuelle Synchronisation
+Benutzerdefiniertes Intervall | Eigener Abstand in Minuten; wird nur beim Zeitplan „Benutzerdefiniertes Intervall“ angezeigt
 TLS-Zertifikat prüfen | Sollte nur zu Diagnosezwecken deaktiviert werden
 Zeitlimit der Anfrage | Maximale Dauer einer HTTP-Anfrage
 
 Über **Verbindung testen** wird die Anmeldung geprüft und die Anzahl der gefundenen Kalender ausgegeben. **Jetzt synchronisieren** aktualisiert den internen Kalendercache und informiert die verbundenen Child-Instanzen.
+
+Bestehende Instanzen behalten ihren bisherigen Minutenwert als benutzerdefiniertes Intervall. Bei ICS/Webcal sollte der Zeitplan des Kontos passend zum Zeitplan der zugehörigen Kalenderinstanz gewählt werden, da beide Instanzen den Feed für unterschiedliche Aufgaben abrufen.
 
 ### Google Calendar
 

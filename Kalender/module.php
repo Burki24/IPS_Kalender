@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use IPSKalender\SynchronizationSchedule;
+
+require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
+
 class Kalender extends IPSModuleStrict
 {
     private const DATA_ID_TO_PARENT = '{4E535B1D-69C7-AC77-1372-0282B21BAEC9}';
@@ -21,6 +25,7 @@ class Kalender extends IPSModuleStrict
         $this->RegisterPropertyString('CalendarURL', '');
         $this->RegisterPropertyString('CalendarColor', '');
         $this->RegisterPropertyBoolean('CanWrite', false);
+        $this->RegisterPropertyInteger('UpdateSchedule', SynchronizationSchedule::CUSTOM);
         $this->RegisterPropertyInteger('UpdateInterval', 15);
         $this->RegisterPropertyInteger('PastDays', 30);
         $this->RegisterPropertyInteger('FutureDays', 365);
@@ -36,7 +41,39 @@ class Kalender extends IPSModuleStrict
         $this->RegisterVariableInteger('LastSynchronization', 'Last synchronization', '~UnixTimestamp', 20);
         $this->RegisterVariableString('Events', 'Events', '', 30);
 
-        $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKAL_Synchronize($_IPS[\'TARGET\']);');
+        $this->RegisterTimer('SynchronizationTimer', 0, 'IPSKAL_ScheduledSynchronize($_IPS[\'TARGET\']);');
+    }
+
+    public function GetConfigurationForm(): string
+    {
+        $form = json_decode(
+            file_get_contents(__DIR__ . '/form.json'),
+            true,
+            512,
+            JSON_THROW_ON_ERROR
+        );
+        $customSchedule = $this->ReadPropertyInteger('UpdateSchedule') === SynchronizationSchedule::CUSTOM;
+        foreach ($form['elements'] as &$element) {
+            if (($element['name'] ?? '') === 'UpdateInterval') {
+                $element['visible'] = $customSchedule;
+                break;
+            }
+        }
+        unset($element);
+
+        return json_encode(
+            $form,
+            JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR
+        );
+    }
+
+    public function UpdateScheduleForm(int $schedule): void
+    {
+        $this->UpdateFormField(
+            'UpdateInterval',
+            'visible',
+            $schedule === SynchronizationSchedule::CUSTOM
+        );
     }
 
     public function ApplyChanges(): void
@@ -57,10 +94,28 @@ class Kalender extends IPSModuleStrict
             return;
         }
 
-        $interval = max(1, $this->ReadPropertyInteger('UpdateInterval'));
-        $this->SetTimerInterval('SynchronizationTimer', $interval * 60 * 1000);
+        $this->SetTimerInterval(
+            'SynchronizationTimer',
+            SynchronizationSchedule::timerInterval(
+                $this->ReadPropertyInteger('UpdateSchedule'),
+                $this->ReadPropertyInteger('UpdateInterval')
+            )
+        );
         $this->refreshCalendarMetadataSafely();
         $this->SetStatus(IS_ACTIVE);
+    }
+
+    public function ScheduledSynchronize(): bool
+    {
+        if (!SynchronizationSchedule::isDue(
+            $this->ReadPropertyInteger('UpdateSchedule'),
+            $this->ReadPropertyInteger('UpdateInterval'),
+            $this->ReadAttributeInteger('LastSynchronization')
+        )) {
+            return true;
+        }
+
+        return $this->Synchronize();
     }
 
     public function ReceiveData(string $JSONString): string
@@ -356,6 +411,9 @@ class Kalender extends IPSModuleStrict
 
     private function validateConfiguration(): string
     {
+        if (!SynchronizationSchedule::isValid($this->ReadPropertyInteger('UpdateSchedule'))) {
+            return 'The synchronization schedule is invalid.';
+        }
         if (trim($this->ReadPropertyString('CalendarID')) === '') {
             return 'The calendar ID is missing.';
         }

@@ -26,10 +26,13 @@ Das Ändern oder einzelne Löschen von Vorkommen einer Terminserie ist noch nich
 Eigenschaft | Beschreibung
 --- | ---
 Aktiv | Aktiviert die regelmäßige Synchronisation
-Aktualisierungsintervall | Abstand der Terminabfragen in Minuten
+Aktualisierungsplan | Vorgegebener Rhythmus von fünf Minuten bis jährlich oder ausschließlich manuelle Synchronisation
+Benutzerdefiniertes Intervall | Eigener Abstand in Minuten; wird nur beim Zeitplan „Benutzerdefiniertes Intervall“ angezeigt
 Vergangene Termine laden | Anzahl der Tage vor dem aktuellen Datum
 Zukünftige Termine laden | Anzahl der Tage nach dem aktuellen Datum
 Kalenderidentität | Vom Konfigurator gesetzte, schreibgeschützte Anbieterinformationen
+
+Bestehende Instanzen behalten ihren bisherigen Minutenwert als benutzerdefiniertes Intervall. Monatliche und jährliche Zeitpläne werden intern täglich auf Fälligkeit geprüft, damit keine für lange Zeiträume ungeeigneten Millisekunden-Timer verwendet werden. **Jetzt synchronisieren** bleibt unabhängig vom Zeitplan jederzeit verfügbar.
 
 ## Statusvariablen
 

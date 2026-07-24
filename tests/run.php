@@ -8,10 +8,12 @@ use IPSKalender\GoogleCalendarProvider;
 use IPSKalender\ICalendarFeedProvider;
 use IPSKalender\ICalendarFeedProviderException;
 use IPSKalender\OAuthBridgeClient;
+use IPSKalender\SynchronizationSchedule;
 
 require_once __DIR__ . '/../libs/GoogleCalendarProvider.php';
 require_once __DIR__ . '/../libs/ICalendarFeedProvider.php';
 require_once __DIR__ . '/../libs/OAuthBridgeClient.php';
+require_once __DIR__ . '/../libs/SynchronizationSchedule.php';
 
 final class FakeHttpClient implements CalendarHttpClientInterface
 {
@@ -235,5 +237,47 @@ try {
 } catch (ICalendarFeedProviderException $exception) {
     assertTrueValue(str_contains($exception->getMessage(), 'read-only'), 'Write attempts must explain the read-only limitation.');
 }
+
+assertSameValue(
+    604800000,
+    SynchronizationSchedule::timerInterval(SynchronizationSchedule::WEEKLY, 15),
+    'Weekly synchronization must use a safe direct timer interval.'
+);
+assertSameValue(
+    86400000,
+    SynchronizationSchedule::timerInterval(SynchronizationSchedule::MONTHLY, 15),
+    'Monthly synchronization must use a daily due-date timer.'
+);
+assertSameValue(
+    0,
+    SynchronizationSchedule::timerInterval(SynchronizationSchedule::MANUAL, 15),
+    'Manual synchronization must disable the timer.'
+);
+$lastSynchronization = (new DateTimeImmutable('2026-01-15T12:00:00Z'))->getTimestamp();
+assertSameValue(
+    false,
+    SynchronizationSchedule::isDue(
+        SynchronizationSchedule::MONTHLY,
+        15,
+        $lastSynchronization,
+        (new DateTimeImmutable('2026-02-15T11:59:59Z'))->getTimestamp()
+    ),
+    'Monthly synchronization must not run before the next month is reached.'
+);
+assertSameValue(
+    true,
+    SynchronizationSchedule::isDue(
+        SynchronizationSchedule::MONTHLY,
+        15,
+        $lastSynchronization,
+        (new DateTimeImmutable('2026-02-15T12:00:00Z'))->getTimestamp()
+    ),
+    'Monthly synchronization must become due after one calendar month.'
+);
+assertSameValue(
+    false,
+    SynchronizationSchedule::isDue(SynchronizationSchedule::MANUAL, 15, 0),
+    'Manual synchronization must never be triggered by the scheduler.'
+);
 
 echo "All IPS_Kalender tests passed.\n";

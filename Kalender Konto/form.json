@@ -78,11 +78,68 @@
             "onClick": "echo IPSKALACC_DisconnectGoogle($id) ? 'Google account disconnected.' : 'Could not disconnect Google account.';"
         },
         {
+            "type": "Select",
+            "name": "UpdateSchedule",
+            "caption": "Synchronization schedule",
+            "onChange": "IPSKALACC_UpdateScheduleForm($id, $UpdateSchedule);",
+            "options": [
+                {
+                    "caption": "Custom interval",
+                    "value": 0
+                },
+                {
+                    "caption": "Every 5 minutes",
+                    "value": 1
+                },
+                {
+                    "caption": "Every 15 minutes",
+                    "value": 2
+                },
+                {
+                    "caption": "Every 30 minutes",
+                    "value": 3
+                },
+                {
+                    "caption": "Hourly",
+                    "value": 4
+                },
+                {
+                    "caption": "Every 6 hours",
+                    "value": 5
+                },
+                {
+                    "caption": "Every 12 hours",
+                    "value": 6
+                },
+                {
+                    "caption": "Daily",
+                    "value": 7
+                },
+                {
+                    "caption": "Weekly",
+                    "value": 8
+                },
+                {
+                    "caption": "Monthly",
+                    "value": 9
+                },
+                {
+                    "caption": "Yearly",
+                    "value": 10
+                },
+                {
+                    "caption": "Manual only",
+                    "value": 11
+                }
+            ]
+        },
+        {
             "type": "NumberSpinner",
             "name": "UpdateInterval",
-            "caption": "Update interval",
+            "caption": "Custom interval",
             "suffix": " minutes",
-            "minimum": 1
+            "minimum": 1,
+            "maximum": 525600
         },
         {
             "type": "CheckBox",
