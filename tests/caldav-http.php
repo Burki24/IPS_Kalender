@@ -7,6 +7,7 @@ use IPSKalender\CalendarHttpClient;
 use IPSKalender\CalendarHttpException;
 
 require_once __DIR__ . '/../libs/CalendarHttpClient.php';
+require_once __DIR__ . '/../libs/CalDAVOriginPolicy.php';
 
 function assertHttpSame(mixed $expected, mixed $actual, string $message): void
 {
